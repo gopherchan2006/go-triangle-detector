@@ -31,9 +31,7 @@ func main() {
 		Overwrite: *force,
 	}, filepath.Join(dataDir, func() string {
 		f := os.Getenv("CANDLES_FILE")
-		if f == "" {
-			return "candles.json"
-		}
+		
 		return f
 	}()))
 	if err != nil {
