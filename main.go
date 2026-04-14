@@ -45,7 +45,7 @@ func main() {
 		fmt.Println("Working with the last 50 candles.")
 	}
 
-	result := DetectAscendingTriangle(candles, 15)
+	result := DetectAscendingTriangle(candles)
 
 	renderer := NewEChartsRenderer()
 

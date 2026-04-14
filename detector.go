@@ -18,15 +18,7 @@ type AscendingTriangleResult struct {
 	Score             float64
 }
 
-func DetectAscendingTriangle(candles []Candle, minCandles int) AscendingTriangleResult {
-	if len(candles) > 50 {
-		candles = candles[len(candles)-50:]
-	}
-
-	if len(candles) < minCandles {
-		return AscendingTriangleResult{}
-	}
-
+func DetectAscendingTriangle(candles []Candle) AscendingTriangleResult {
 	swingHighs := findSwingHighs(candles, 3)
 	swingLows := findSwingLows(candles, 3)
 
