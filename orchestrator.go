@@ -11,7 +11,8 @@ func RenderTriangleDetection(
 
 	if !result.Found {
 		fmt.Println("Pattern not found. Saving clean chart.")
-		return renderer.Export("chart_no_pattern.html")
+		
+		return renderer.Export("chart.html")
 	}
 
 	renderer.DrawHorizontalLine(
