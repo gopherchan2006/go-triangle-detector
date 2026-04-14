@@ -40,11 +40,8 @@ Thumbs.db
 *.sublime-project
 *.sublime-workspace
 
-# Input files
-candles.json
-
-# Generated output files
-chart.html
+# Temporary data folder (candles and generated charts)
+tmp/
 
 # Build artifacts
 triangle-detector

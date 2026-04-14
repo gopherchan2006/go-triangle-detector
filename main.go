@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 )
 
 func main() {
@@ -14,13 +16,19 @@ func main() {
 	force := flag.Bool("force", false, "Overwrite candles.json when fetching from Binance")
 	flag.Parse()
 
+	// Ensure temporary data directory exists
+	dataDir := "tmp"
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		log.Fatalf("failed to create data dir: %v", err)
+	}
+
 	candles, err := LoadCandles(CandleRequestParams{
 		Symbol:    *symbol,
 		Interval:  *interval,
 		StartTime: *startDate,
 		EndTime:   *endDate,
 		Overwrite: *force,
-	}, "candles.json")
+	}, filepath.Join(dataDir, "candles.json"))
 	if err != nil {
 		log.Fatalf("Failed to load candles: %v", err)
 	}
@@ -36,11 +44,11 @@ func main() {
 
 	renderer := NewEChartsRenderer()
 
-	if err := RenderTriangleDetection(candles, result, renderer); err != nil {
+	outputFile := filepath.Join(dataDir, "chart.html")
+	if err := RenderTriangleDetection(candles, result, renderer, outputFile); err != nil {
 		log.Fatalf("Rendering error: %v", err)
 	}
 
-	outputFile := "chart.html"
 	fmt.Printf("\nChart saved: %s\n", outputFile)
 	fmt.Println("Open the file in your browser to view.")
 }

@@ -6,13 +6,13 @@ func RenderTriangleDetection(
 	candles []Candle,
 	result AscendingTriangleResult,
 	renderer ChartRenderer,
+	outputPath string,
 ) error {
 	renderer.RenderCandles(candles)
 
 	if !result.Found {
 		fmt.Println("Pattern not found. Saving clean chart.")
-		
-		return renderer.Export("chart.html")
+		return renderer.Export(outputPath)
 	}
 
 	renderer.DrawHorizontalLine(
@@ -47,5 +47,5 @@ func RenderTriangleDetection(
 		fmt.Println("  Breakout : pending")
 	}
 
-	return renderer.Export("chart.html")
+	return renderer.Export(outputPath)
 }
