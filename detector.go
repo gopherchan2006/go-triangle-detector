@@ -1,6 +1,9 @@
 package main
 
-import "math"
+import (
+	"fmt"
+	"math"
+)
 
 type SwingPoint struct {
 	Index int
@@ -18,6 +21,11 @@ type AscendingTriangleResult struct {
 	Score             float64
 }
 
+type levelGroupEntry struct {
+	level   float64
+	touches []SwingPoint
+}
+
 func DetectAscendingTriangle(candles []Candle) AscendingTriangleResult {
 	swingHighs := findSwingHighs(candles, 3)
 	swingLows := findSwingLows(candles, 3)
@@ -26,7 +34,7 @@ func DetectAscendingTriangle(candles []Candle) AscendingTriangleResult {
 		return AscendingTriangleResult{}
 	}
 
-	resistanceLevel, resistanceTouches := findHorizontalResistance(swingHighs)
+	resistanceLevel, resistanceTouches := findHorizontalResistance(candles, swingHighs)
 	if resistanceTouches < 2 {
 		return AscendingTriangleResult{}
 	}
@@ -93,7 +101,71 @@ func findSwingLows(candles []Candle, minDistance int) []SwingPoint {
 	return lows
 }
 
-func findHorizontalResistance(highs []SwingPoint) (level float64, touches int) {
+func visualizeHorizontalResistance(
+	candles []Candle,
+	highs []SwingPoint,
+	groups []levelGroupEntry,
+	bestLevel float64,
+	maxTouches int,
+	filename string,
+) error {
+	r := NewEChartsRenderer()
+	r.RenderCandles(candles)
+
+	// 1. Отмечаем каждый свинг-хай стрелкой.
+	//    Label содержит цену, чтобы на графике было понятно.
+	for _, h := range highs {
+		r.overlays = append(r.overlays, overlay{
+			kind:    kindBreakout,
+			fromIdx: h.Index,
+			label:   fmt.Sprintf("H %.2f", h.Value),
+			color:   "#ffdd00",
+		})
+	}
+
+	// 2. Рисуем горизонтальные линии для каждой группы.
+	for _, g := range groups {
+		if len(g.touches) == 0 {
+			continue
+		}
+
+		// Границы линии — от самого раннего до самого позднего touch,
+		// потом продлеваем до конца свечей, чтобы линия была видна справа.
+		fromIdx := g.touches[0].Index
+		toIdx := g.touches[0].Index
+		for _, p := range g.touches {
+			if p.Index < fromIdx {
+				fromIdx = p.Index
+			}
+			if p.Index > toIdx {
+				toIdx = p.Index
+			}
+		}
+		// Продлеваем до конца чарта для наглядности
+		toIdx = len(candles) - 1
+
+		label := fmt.Sprintf("Resistance %.2f (%d touches)", g.level, len(g.touches))
+
+		if g.level == bestLevel {
+			// Лучший уровень — синяя пунктирная Target-линия на весь диапазон.
+			// DrawTargetLine уже рисует от 0 до len(candles)-1.
+			r.DrawTargetLine(g.level)
+		} else {
+			// Остальные уровни — красные горизонтали.
+			r.DrawHorizontalLine(g.level, fromIdx, toIdx, label)
+		}
+	}
+
+	if err := r.Export(filename); err != nil {
+		return fmt.Errorf("visualizeHorizontalResistance: export failed: %w", err)
+	}
+
+	fmt.Printf("[chart] Saved to %s  (best level=%.4f, touches=%d)\n",
+		filename, bestLevel, maxTouches)
+	return nil
+}
+
+func findHorizontalResistance(candles []Candle, highs []SwingPoint) (level float64, touches int) {
 	if len(highs) < 2 {
 		return 0, 0
 	}
@@ -122,6 +194,22 @@ func findHorizontalResistance(highs []SwingPoint) (level float64, touches int) {
 			maxTouches = len(points)
 			bestLevel = lvl
 		}
+	}
+
+	groups := make([]levelGroupEntry, 0, len(levelGroups))
+	for lvl, pts := range levelGroups {
+		groups = append(groups, levelGroupEntry{level: lvl, touches: pts})
+	}
+
+	if err := visualizeHorizontalResistance(
+		candles,
+		highs,
+		groups,
+		bestLevel,
+		maxTouches,
+		"tmp/resistance.html",
+	); err != nil {
+		fmt.Printf("[warn] could not render chart: %v\n", err)
 	}
 
 	return bestLevel, maxTouches
