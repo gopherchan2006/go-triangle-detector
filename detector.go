@@ -192,6 +192,14 @@ func findHorizontalResistance(candles []Candle, highs []SwingPoint) (level float
 		groups = append(groups, levelGroupEntry{level: lvl, touches: pts})
 	}
 
+	for _, c := range candles {
+		if bestLevel <= c.Close {
+			bestLevel = 0
+			maxTouches = 0
+			groups = nil
+		}
+	}
+
 	if err := visualizeHorizontalResistance(
 		candles,
 		highs,
