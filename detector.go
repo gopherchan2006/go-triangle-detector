@@ -17,11 +17,6 @@ type AscendingTriangleResult struct {
 	SupportIntercept float64
 }
 
-type levelGroupEntry struct {
-	level   float64
-	touches []SwingPoint
-}
-
 func DetectAscendingTriangle(candles []Candle) AscendingTriangleResult {
 	swingHighs := findSwingHighs(candles, 3)
 	swingLows := findSwingLows(candles, 3)
@@ -114,16 +109,10 @@ func findHorizontalResistance(candles []Candle, highs []SwingPoint) (level float
 		}
 	}
 
-	groups := make([]levelGroupEntry, 0, len(levelGroups))
-	for lvl, pts := range levelGroups {
-		groups = append(groups, levelGroupEntry{level: lvl, touches: pts})
-	}
-
 	for _, c := range candles {
 		if bestLevel <= c.Close {
 			bestLevel = 0
 			maxTouches = 0
-			groups = nil
 		}
 	}
 
