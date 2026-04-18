@@ -7,9 +7,5 @@ type ChartRenderer interface {
 
 	DrawTrendLine(slope, intercept float64, fromIndex, toIndex int, label string)
 
-	MarkBreakout(candleIndex int)
-
-	DrawTargetLine(price float64)
-
 	Export(filename string) error
 }

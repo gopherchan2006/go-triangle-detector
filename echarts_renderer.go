@@ -14,8 +14,6 @@ type overlayKind string
 const (
 	kindHorizontal overlayKind = "horizontal"
 	kindTrend      overlayKind = "trend"
-	kindTarget     overlayKind = "target"
-	kindBreakout   overlayKind = "breakout"
 )
 
 type overlay struct {
@@ -74,26 +72,6 @@ func (r *EChartsRenderer) DrawTrendLine(slope, intercept float64, fromIndex, toI
 	})
 }
 
-func (r *EChartsRenderer) MarkBreakout(candleIndex int) {
-	r.overlays = append(r.overlays, overlay{
-		kind:    kindBreakout,
-		fromIdx: candleIndex,
-		label:   "Breakout",
-		color:   "#ffdd00",
-	})
-}
-
-func (r *EChartsRenderer) DrawTargetLine(price float64) {
-	r.overlays = append(r.overlays, overlay{
-		kind:    kindTarget,
-		level:   price,
-		fromIdx: 0,
-		toIdx:   len(r.candles) - 1,
-		label:   fmt.Sprintf("Target %.2f", price),
-		color:   "#4488ff",
-	})
-}
-
 func (r *EChartsRenderer) Export(filename string) error {
 	if len(r.candles) == 0 {
 		return fmt.Errorf("no candles to render")
@@ -103,7 +81,7 @@ func (r *EChartsRenderer) Export(filename string) error {
 
 	for _, ov := range r.overlays {
 		switch ov.kind {
-		case kindHorizontal, kindTrend, kindTarget:
+		case kindHorizontal, kindTrend:
 			line := r.buildLineOverlay(ov)
 			kline.Overlap(line)
 		}
@@ -165,33 +143,8 @@ func (r *EChartsRenderer) buildKlineChart() *charts.Kline {
 		}
 	}
 
-	// Собираем markPoints для breakout-оверлеев
-	var markPoints []opts.MarkPointNameCoordItem
-	for _, ov := range r.overlays {
-		if ov.kind != kindBreakout {
-			continue
-		}
-		if ov.fromIdx < 0 || ov.fromIdx >= len(r.candles) {
-			continue
-		}
-		markPoints = append(markPoints, opts.MarkPointNameCoordItem{
-			Name:       ov.label,
-			Coordinate: []interface{}{r.timestamps[ov.fromIdx], r.candles[ov.fromIdx].High},
-			Symbol:     "arrow",
-			SymbolSize: 20,
-		})
-	}
-
 	kline.SetXAxis(r.timestamps)
-
-	// ФИКС: применяем markPoints к серии
-	if len(markPoints) > 0 {
-		kline.AddSeries("Candles", klineData,
-			charts.WithMarkPointNameCoordItemOpts(markPoints...),
-		)
-	} else {
-		kline.AddSeries("Candles", klineData)
-	}
+	kline.AddSeries("Candles", klineData)
 
 	return kline
 }
@@ -210,10 +163,6 @@ func (r *EChartsRenderer) buildLineOverlay(ov overlay) *charts.Line {
 			y := ov.slope*float64(i) + ov.intercept
 			data = append(data, opts.LineData{Value: y})
 		}
-	case kindTarget:
-		for i := ov.fromIdx; i <= ov.toIdx && i < len(r.candles); i++ {
-			data = append(data, opts.LineData{Value: ov.level})
-		}
 	}
 
 	line.AddSeries(ov.label, data).
@@ -225,14 +174,6 @@ func (r *EChartsRenderer) buildLineOverlay(ov overlay) *charts.Line {
 				Color: ov.color,
 			}),
 		)
-
-	if ov.kind == kindTarget {
-		line.SetSeriesOptions(
-			charts.WithLineStyleOpts(opts.LineStyle{
-				Type: "dashed",
-			}),
-		)
-	}
 
 	return line
 }
