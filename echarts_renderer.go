@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/go-echarts/go-echarts/v2/charts"
 	"github.com/go-echarts/go-echarts/v2/components"
@@ -109,13 +111,14 @@ func (r *EChartsRenderer) Export(filename string) error {
 	page := components.NewPage()
 	page.AddCharts(kline)
 
-	f, err := os.Create(filename)
-	if err != nil {
-		return fmt.Errorf("failed to create file %s: %w", filename, err)
+	var buf bytes.Buffer
+	if err := page.Render(&buf); err != nil {
+		return fmt.Errorf("failed to render page: %w", err)
 	}
-	defer f.Close()
 
-	return page.Render(f)
+	html := strings.ReplaceAll(buf.String(), `"animation":true`, `"animation":false`)
+
+	return os.WriteFile(filename, []byte(html), 0o644)
 }
 
 func (r *EChartsRenderer) buildSubtitle() string {

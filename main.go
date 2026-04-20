@@ -49,12 +49,18 @@ func main() {
 		}
 	}
 
+	ss, err := NewScreenshotter()
+	if err != nil {
+		log.Fatalf("failed to start browser: %v", err)
+	}
+	defer ss.Close()
+
 	for _, sym := range symbols {
-		analyzeSymbol(sym, *interval, *startDate, *endDate, dataDir)
+		analyzeSymbol(sym, *interval, *startDate, *endDate, dataDir, ss)
 	}
 }
 
-func analyzeSymbol(symbol, interval, startDate, endDate string, dataDir string) {
+func analyzeSymbol(symbol, interval, startDate, endDate string, dataDir string, ss *Screenshotter) {
 	chartDir := filepath.Join("tmp", symbol+"_chart")
 	if err := os.MkdirAll(chartDir, 0o755); err != nil {
 		log.Printf("[%s] failed to create chart dir: %v", symbol, err)
@@ -64,7 +70,7 @@ func analyzeSymbol(symbol, interval, startDate, endDate string, dataDir string) 
 	entries, err := os.ReadDir(chartDir)
 	if err == nil {
 		for _, entry := range entries {
-			if !entry.IsDir() && filepath.Ext(entry.Name()) == ".html" {
+			if !entry.IsDir() && filepath.Ext(entry.Name()) == ".png" {
 				_ = os.Remove(filepath.Join(chartDir, entry.Name()))
 			}
 		}
@@ -101,14 +107,19 @@ func analyzeSymbol(symbol, interval, startDate, endDate string, dataDir string) 
 			timestamp := window[0].Timestamp
 			dateStr := timestamp.Format("2006-01-02")
 
-			chartName := fmt.Sprintf("chart_%s.html", dateStr)
-			outputFile := filepath.Join(chartDir, chartName)
+			htmlTmp := filepath.Join(chartDir, fmt.Sprintf("%s_%s.tmp.html", symbol, dateStr))
+			pngFile := filepath.Join(chartDir, fmt.Sprintf("%s_%s.png", symbol, dateStr))
 
 			renderer := NewEChartsRenderer()
-			if err := RenderTriangleDetection(window, result, renderer, outputFile); err != nil {
+			if err := RenderTriangleDetection(window, result, renderer, htmlTmp); err != nil {
 				log.Printf("[%s] error rendering chart for %s: %v", symbol, dateStr, err)
+				_ = os.Remove(htmlTmp)
 				continue
 			}
+			if err := ss.Screenshot(htmlTmp, pngFile); err != nil {
+				log.Printf("[%s] error taking screenshot for %s: %v", symbol, dateStr, err)
+			}
+			_ = os.Remove(htmlTmp)
 
 			fmt.Printf("[%s] [Pattern #%d] %s | Resistance: %.2f | Support slope: %.4f\n",
 				symbol, patterns, dateStr, result.ResistanceLevel, result.SupportSlope)
