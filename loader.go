@@ -41,7 +41,8 @@ func LoadCandles(params CandleRequestParams, filePath string) ([]Candle, error) 
 			params.Symbol,
 			params.Interval,
 			params.StartTime,
-			params.EndTime, 50,
+			params.EndTime,
+			0,
 		)
 		if err != nil {
 			return nil, err
@@ -96,57 +97,72 @@ func fetchBinanceCandles(
 		return nil, fmt.Errorf("start time must be before end time")
 	}
 
-	if limit <= 0 || limit > 1000 {
-		limit = 50
-	}
-
 	intervalMs, err := intervalToMilliseconds(interval)
 	if err != nil {
 		return nil, err
 	}
-	if startMs > 0 && endMs > 0 {
-		span := endMs - startMs
-		maxSpan := intervalMs * 50
-		if span > maxSpan {
-			suggestedEnd := time.UnixMilli(startMs + maxSpan).UTC()
-			suggestedStart := time.UnixMilli(endMs - maxSpan).UTC()
-			startStrFmt := time.UnixMilli(startMs).UTC().Format(time.RFC3339)
-			endStrFmt := time.UnixMilli(endMs).UTC().Format(time.RFC3339)
-			return nil, fmt.Errorf("requested range exceeds 50 candles (max 50)\nSuggested end: %s (keep start %s)\nSuggested start: %s (keep end %s)",
-				suggestedEnd.Format(time.RFC3339), startStrFmt, suggestedStart.Format(time.RFC3339), endStrFmt)
+
+	allCandles := []Candle{}
+	currentStart := startMs
+
+	for {
+		// Fetch up to 1000 candles per request (Binance API limit)
+		currentEnd := endMs
+		if currentEnd == 0 || currentEnd-currentStart > intervalMs*1000 {
+			currentEnd = currentStart + intervalMs*1000
+		}
+
+		query := url.Values{
+			"symbol":   {symbol},
+			"interval": {interval},
+			"limit":    {"1000"},
+		}
+		if currentStart > 0 {
+			query.Set("startTime", strconv.FormatInt(currentStart, 10))
+		}
+		if currentEnd > 0 {
+			query.Set("endTime", strconv.FormatInt(currentEnd, 10))
+		}
+		endpoint := "https://api.binance.com/api/v3/klines?" + query.Encode()
+
+		resp, err := http.Get(endpoint)
+		if err != nil {
+			return nil, fmt.Errorf("binance request failed: %w", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			return nil, fmt.Errorf("binance returned %d: %s", resp.StatusCode, string(body))
+		}
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read binance response: %w", err)
+		}
+
+		candles, err := parseKlines(body)
+		if err != nil {
+			return nil, err
+		}
+
+		if len(candles) == 0 {
+			break
+		}
+
+		allCandles = append(allCandles, candles...)
+
+		// Move to next batch (start after last candle)
+		lastCandle := candles[len(candles)-1]
+		currentStart = lastCandle.Timestamp.UnixMilli() + intervalMs
+
+		// Stop if we've reached the end date or got fewer than 1000 (meaning we're at the end)
+		if (endMs > 0 && currentStart >= endMs) || len(candles) < 1000 {
+			break
 		}
 	}
 
-	query := url.Values{
-		"symbol":   {symbol},
-		"interval": {interval},
-		"limit":    {strconv.Itoa(limit)},
-	}
-	if startMs > 0 {
-		query.Set("startTime", strconv.FormatInt(startMs, 10))
-	}
-	if endMs > 0 {
-		query.Set("endTime", strconv.FormatInt(endMs, 10))
-	}
-	endpoint := "https://api.binance.com/api/v3/klines?" + query.Encode()
-
-	resp, err := http.Get(endpoint)
-	if err != nil {
-		return nil, fmt.Errorf("binance request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("binance returned %d: %s", resp.StatusCode, string(body))
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read binance response: %w", err)
-	}
-
-	return parseKlines(body)
+	return allCandles, nil
 }
 
 func parseKlines(body []byte) ([]Candle, error) {
