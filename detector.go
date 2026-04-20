@@ -52,8 +52,10 @@ func DetectAscendingTriangle(candles []Candle) AscendingTriangleResult {
 		return AscendingTriangleResult{}
 	}
 
-	if valleys[len(valleys)-1].Value <= valleys[0].Value {
-		return AscendingTriangleResult{}
+	for i := 1; i < len(valleys); i++ {
+		if valleys[i].Value <= valleys[i-1].Value {
+			return AscendingTriangleResult{}
+		}
 	}
 
 	supportSlope, supportIntercept := linearRegression(valleys)
