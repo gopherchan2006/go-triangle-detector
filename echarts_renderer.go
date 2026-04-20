@@ -14,6 +14,7 @@ type overlayKind string
 const (
 	kindHorizontal overlayKind = "horizontal"
 	kindTrend      overlayKind = "trend"
+	kindScatter    overlayKind = "scatter"
 )
 
 type overlay struct {
@@ -25,16 +26,22 @@ type overlay struct {
 	toIdx     int
 	label     string
 	color     string
+	points    []SwingPoint // for kindScatter
 }
 
 type EChartsRenderer struct {
 	candles    []Candle
 	timestamps []string
 	overlays   []overlay
+	stats      []string
 }
 
 func NewEChartsRenderer() *EChartsRenderer {
 	return &EChartsRenderer{}
+}
+
+func (r *EChartsRenderer) AddStat(key, value string) {
+	r.stats = append(r.stats, key+": "+value)
 }
 
 func (r *EChartsRenderer) RenderCandles(candles []Candle) {
@@ -72,6 +79,15 @@ func (r *EChartsRenderer) DrawTrendLine(slope, intercept float64, fromIndex, toI
 	})
 }
 
+func (r *EChartsRenderer) DrawScatterMarkers(points []SwingPoint, label string, color string) {
+	r.overlays = append(r.overlays, overlay{
+		kind:   kindScatter,
+		label:  label,
+		color:  color,
+		points: points,
+	})
+}
+
 func (r *EChartsRenderer) Export(filename string) error {
 	if len(r.candles) == 0 {
 		return fmt.Errorf("no candles to render")
@@ -84,6 +100,9 @@ func (r *EChartsRenderer) Export(filename string) error {
 		case kindHorizontal, kindTrend:
 			line := r.buildLineOverlay(ov)
 			kline.Overlap(line)
+		case kindScatter:
+			scatter := r.buildScatterOverlay(ov)
+			kline.Overlap(scatter)
 		}
 	}
 
@@ -99,6 +118,20 @@ func (r *EChartsRenderer) Export(filename string) error {
 	return page.Render(f)
 }
 
+func (r *EChartsRenderer) buildSubtitle() string {
+	base := fmt.Sprintf("Analysis of %d candles", len(r.candles))
+	if len(r.stats) == 0 {
+		return base
+	}
+	parts := []string{base}
+	parts = append(parts, r.stats...)
+	result := parts[0]
+	for _, p := range parts[1:] {
+		result += "  |  " + p
+	}
+	return result
+}
+
 func (r *EChartsRenderer) buildKlineChart() *charts.Kline {
 	kline := charts.NewKLine()
 
@@ -109,7 +142,7 @@ func (r *EChartsRenderer) buildKlineChart() *charts.Kline {
 		}),
 		charts.WithTitleOpts(opts.Title{
 			Title:    "Horizontal Resistance Detector",
-			Subtitle: fmt.Sprintf("Analysis of %d candles", len(r.candles)),
+			Subtitle: r.buildSubtitle(),
 		}),
 		charts.WithTooltipOpts(opts.Tooltip{
 			Show:    true,
@@ -149,22 +182,54 @@ func (r *EChartsRenderer) buildKlineChart() *charts.Kline {
 	return kline
 }
 
+func (r *EChartsRenderer) buildScatterOverlay(ov overlay) *charts.Scatter {
+	scatter := charts.NewScatter()
+
+	// Build sparse data: nil for every candle index, actual value at touch indices
+	data := make([]opts.ScatterData, len(r.candles))
+	for _, p := range ov.points {
+		if p.Index >= 0 && p.Index < len(r.candles) {
+			data[p.Index] = opts.ScatterData{
+				Value:      p.Value,
+				Symbol:     "circle",
+				SymbolSize: 12,
+			}
+		}
+	}
+
+	scatter.SetXAxis(r.timestamps)
+	scatter.AddSeries(ov.label, data).
+		SetSeriesOptions(
+			charts.WithItemStyleOpts(opts.ItemStyle{
+				Color: ov.color,
+			}),
+		)
+
+	return scatter
+}
+
 func (r *EChartsRenderer) buildLineOverlay(ov overlay) *charts.Line {
 	line := charts.NewLine()
 
-	var data []opts.LineData
+	// Создаём срез длиной с весь чарт, заполняем "-" (ECharts воспринимает как null/gap)
+	data := make([]opts.LineData, len(r.candles))
+	for i := range data {
+		data[i] = opts.LineData{Value: "-"}
+	}
+
 	switch ov.kind {
 	case kindHorizontal:
 		for i := ov.fromIdx; i <= ov.toIdx && i < len(r.candles); i++ {
-			data = append(data, opts.LineData{Value: ov.level})
+			data[i] = opts.LineData{Value: ov.level}
 		}
 	case kindTrend:
 		for i := ov.fromIdx; i <= ov.toIdx && i < len(r.candles); i++ {
 			y := ov.slope*float64(i) + ov.intercept
-			data = append(data, opts.LineData{Value: y})
+			data[i] = opts.LineData{Value: y}
 		}
 	}
 
+	line.SetXAxis(r.timestamps)
 	line.AddSeries(ov.label, data).
 		SetSeriesOptions(
 			charts.WithLineChartOpts(opts.LineChart{

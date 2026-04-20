@@ -7,5 +7,9 @@ type ChartRenderer interface {
 
 	DrawTrendLine(slope, intercept float64, fromIndex, toIndex int, label string)
 
+	DrawScatterMarkers(points []SwingPoint, label string, color string)
+
+	AddStat(key, value string)
+
 	Export(filename string) error
 }
