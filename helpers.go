@@ -1,26 +1,10 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 	"strconv"
 	"time"
 )
-
-func isEmptyFile(path string) (bool, error) {
-	info, err := os.Stat(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return true, nil
-		}
-		return false, err
-	}
-	if info.Size() == 0 {
-		return true, nil
-	}
-	return false, nil
-}
 
 func parseInt64(value interface{}) (int64, bool) {
 	switch v := value.(type) {
@@ -28,9 +12,6 @@ func parseInt64(value interface{}) (int64, bool) {
 		return int64(v), true
 	case int64:
 		return v, true
-	case json.Number:
-		i, err := v.Int64()
-		return i, err == nil
 	default:
 		return 0, false
 	}
@@ -43,32 +24,9 @@ func parseFloat(value interface{}) (float64, bool) {
 		return f, err == nil
 	case float64:
 		return v, true
-	case json.Number:
-		f, err := v.Float64()
-		return f, err == nil
 	default:
 		return 0, false
 	}
-}
-
-func readJSONFile[T any](path string) ([]T, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("error reading file %s: %w", path, err)
-	}
-	var items []T
-	if err := json.Unmarshal(data, &items); err != nil {
-		return nil, fmt.Errorf("error parsing JSON from %s: %w", path, err)
-	}
-	return items, nil
-}
-
-func saveJSONFile[T any](path string, items []T) error {
-	data, err := json.MarshalIndent(items, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, data, 0o644)
 }
 
 func intervalToMilliseconds(interval string) (int64, error) {

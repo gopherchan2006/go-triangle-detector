@@ -15,55 +15,20 @@ type CandleRequestParams struct {
 	Interval  string
 	StartTime string
 	EndTime   string
-	Overwrite bool
 }
 
-func LoadCandles(params CandleRequestParams, filePath string) ([]Candle, error) {
-	isEmptyCandles, err := isEmptyFile(filePath)
-	if err != nil {
-		return nil, err
-	}
-
-	if params.Symbol != "" && params.Interval == "" {
+func LoadCandles(params CandleRequestParams) ([]Candle, error) {
+	if params.Interval == "" {
 		params.Interval = "15m"
 	}
 
-	wantFetch := false
-	if params.Symbol != "" && params.Interval != "" {
-		wantFetch = true
-	}
-
-	if isEmptyCandles && params.Symbol == "" && params.Interval == "" {
-		params.Symbol = "BTCUSDT"
-		params.Interval = "15m"
-
-		wantFetch = true
-	}
-
-	if wantFetch {
-		candles, err := fetchBinanceCandles(
-			params.Symbol,
-			params.Interval,
-			params.StartTime,
-			params.EndTime,
-			0,
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		if isEmptyCandles || params.Overwrite {
-			if err := saveJSONFile[Candle](filePath, candles); err != nil {
-				return nil, err
-			}
-		} else {
-			fmt.Printf("note: fetched %d candles but %s already contains data; not overwriting\n", len(candles), filePath)
-		}
-
-		return candles, nil
-	}
-
-	return readJSONFile[Candle](filePath)
+	return fetchBinanceCandles(
+		params.Symbol,
+		params.Interval,
+		params.StartTime,
+		params.EndTime,
+		0,
+	)
 }
 
 func fetchBinanceCandles(
@@ -109,7 +74,6 @@ func fetchBinanceCandles(
 	currentStart := startMs
 
 	for {
-		// Fetch up to 1000 candles per request (Binance API limit)
 		currentEnd := endMs
 		if currentEnd == 0 || currentEnd-currentStart > intervalMs*1000 {
 			currentEnd = currentStart + intervalMs*1000
@@ -155,11 +119,9 @@ func fetchBinanceCandles(
 
 		allCandles = append(allCandles, candles...)
 
-		// Move to next batch (start after last candle)
 		lastCandle := candles[len(candles)-1]
 		currentStart = lastCandle.Timestamp.UnixMilli() + intervalMs
 
-		// Stop if we've reached the end date or got fewer than 1000 (meaning we're at the end)
 		if (endMs > 0 && currentStart >= endMs) || len(candles) < 1000 {
 			break
 		}
