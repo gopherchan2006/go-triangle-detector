@@ -130,6 +130,48 @@ func fetchBinanceCandles(
 	return allCandles, nil
 }
 
+func LoadLastNCandles(symbol, interval string, n int) ([]Candle, error) {
+	if n <= 0 {
+		n = 50
+	}
+	if n > 999 {
+		n = 999
+	}
+
+	query := url.Values{
+		"symbol":   {symbol},
+		"interval": {interval},
+		"limit":    {strconv.Itoa(n + 1)},
+	}
+	endpoint := "https://api.binance.com/api/v3/klines?" + query.Encode()
+
+	resp, err := http.Get(endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("binance request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("binance returned %d: %s", resp.StatusCode, string(body))
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("reading response: %w", err)
+	}
+
+	candles, err := parseKlines(body)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(candles) > 0 {
+		candles = candles[:len(candles)-1]
+	}
+	return candles, nil
+}
+
 func parseKlines(body []byte) ([]Candle, error) {
 	var raw [][]interface{}
 	if err := json.Unmarshal(body, &raw); err != nil {

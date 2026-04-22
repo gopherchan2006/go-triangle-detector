@@ -14,18 +14,45 @@ func main() {
 	interval := flag.String("interval", "", "Candle interval, e.g. 15m")
 	startDate := flag.String("start", "", "Start time in RFC3339 or YYYY-MM-DD (default: 2026-01-01)")
 	endDate := flag.String("end", "", "End time in RFC3339 or YYYY-MM-DD (default: 2026-04-18)")
+	realtimeMode := flag.Bool("realtime", false, "Run real-time scanning on all active USDT pairs")
+	workers := flag.Int("workers", 20, "Concurrent workers for real-time mode")
+	noScreenshots := flag.Bool("no-screenshots", false, "Disable screenshots in real-time mode")
 	flag.Parse()
 
 	_ = loadEnvFile(".env")
+
+	if *interval == "" {
+		*interval = "15m"
+	}
+
+	if *realtimeMode {
+		needBrowser := !*noScreenshots
+		var ss *Screenshotter
+		if needBrowser {
+			var err error
+			ss, err = NewScreenshotter()
+			if err != nil {
+				log.Fatalf("failed to start browser: %v", err)
+			}
+			defer ss.Close()
+		}
+
+		cfg := RealtimeConfig{
+			Interval:        *interval,
+			Workers:         *workers,
+			WindowSize:      50,
+			OutputDir:       filepath.Join("tmp", "realtime"),
+			WithScreenshots: needBrowser,
+		}
+		RunRealtime(cfg, ss)
+		return
+	}
 
 	if *startDate == "" {
 		*startDate = "2026-01-01"
 	}
 	if *endDate == "" {
 		*endDate = "2026-04-18"
-	}
-	if *interval == "" {
-		*interval = "15m"
 	}
 
 	dataDir := os.Getenv("DATA_DIR")
