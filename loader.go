@@ -2,8 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -145,31 +147,62 @@ func LoadLastNCandles(symbol, interval string, n int) ([]Candle, error) {
 	}
 	endpoint := "https://api.binance.com/api/v3/klines?" + query.Encode()
 
-	resp, err := http.Get(endpoint)
-	if err != nil {
-		return nil, fmt.Errorf("binance request failed: %w", err)
-	}
-	defer resp.Body.Close()
+	const maxRetries = 5
+	retryDelays := []time.Duration{5 * time.Second, 15 * time.Second, 30 * time.Second, 60 * time.Second, 120 * time.Second}
 
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("binance returned %d: %s", resp.StatusCode, string(body))
+	var lastErr error
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if attempt > 0 {
+			time.Sleep(retryDelays[attempt-1])
+		}
+
+		resp, err := http.Get(endpoint)
+		if err != nil {
+			lastErr = fmt.Errorf("binance request failed: %w", err)
+			if isNetworkError(err) {
+				continue
+			}
+			return nil, lastErr
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			lastErr = fmt.Errorf("binance returned %d: %s", resp.StatusCode, string(body))
+			if resp.StatusCode == 429 || resp.StatusCode >= 500 {
+				continue
+			}
+			return nil, lastErr
+		}
+
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			lastErr = fmt.Errorf("reading response: %w", err)
+			continue
+		}
+
+		candles, err := parseKlines(body)
+		if err != nil {
+			return nil, err
+		}
+
+		if len(candles) > 0 {
+			candles = candles[:len(candles)-1]
+		}
+		return candles, nil
 	}
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("reading response: %w", err)
-	}
+	return nil, fmt.Errorf("all %d attempts failed: %w", maxRetries, lastErr)
+}
 
-	candles, err := parseKlines(body)
-	if err != nil {
-		return nil, err
+func isNetworkError(err error) bool {
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		return true
 	}
-
-	if len(candles) > 0 {
-		candles = candles[:len(candles)-1]
-	}
-	return candles, nil
+	var dnsErr *net.DNSError
+	return errors.As(err, &dnsErr)
 }
 
 func parseKlines(body []byte) ([]Candle, error) {
