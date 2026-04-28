@@ -28,13 +28,12 @@ func detectAscendingTriangleDiag(candles []Candle, rejectStats map[string]*int) 
 }
 
 func reject(reason string, stats map[string]*int) AscendingTriangleResult {
-	if stats != nil {
-		if _, ok := stats[reason]; !ok {
-			v := 0
-			stats[reason] = &v
-		}
-		*stats[reason]++
+	if _, ok := stats[reason]; !ok {
+		v := 0
+		stats[reason] = &v
 	}
+	*stats[reason]++
+
 	return AscendingTriangleResult{}
 }
 
