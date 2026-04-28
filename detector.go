@@ -19,11 +19,7 @@ type AscendingTriangleResult struct {
 	SupportTouchPoints    []SwingPoint
 }
 
-func DetectAscendingTriangle(candles []Candle) AscendingTriangleResult {
-	return detectAscendingTriangle(candles, nil)
-}
-
-func detectAscendingTriangleDiag(candles []Candle, rejectStats map[string]*int) AscendingTriangleResult {
+func DetectAscendingTriangle(candles []Candle, rejectStats map[string]*int) AscendingTriangleResult {
 	return detectAscendingTriangle(candles, rejectStats)
 }
 

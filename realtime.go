@@ -148,7 +148,7 @@ func scanAllSymbols(symbols []string, cfg RealtimeConfig) []scanResult {
 					continue
 				}
 				window := candles[len(candles)-cfg.WindowSize:]
-				det := detectAscendingTriangleDiag(window, nil)
+				det := DetectAscendingTriangle(window, map[string]*int{})
 				resultCh <- scanResult{symbol: sym, candles: window, result: det}
 			}
 		}()
