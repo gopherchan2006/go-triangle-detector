@@ -9,6 +9,39 @@ type SwingPoint struct {
 	Value float64
 }
 
+type DebugInfo struct {
+	AvgPrice           float64
+	ATR                float64
+	Vol                float64
+	SwingHighsCount    int
+	ResistanceLevel    float64
+	ResistanceTouches  int
+	FirstTouchIdx      int
+	HighAboveThreshold float64
+	CrashThreshold     float64
+	ValleysCount       int
+	FirstVIdx          int
+	MaxCrashRange      float64
+	AllowedFlat        float64
+	SupportSlope       float64
+	SupportIntercept   float64
+	MaxValleyDepth     float64
+	ValleyDeviation    float64
+	PatternStart       int
+	PatternEnd         int
+	XIntersect         float64
+	LastX              float64
+	CeilingTol         float64
+	Ceiling            float64
+	FloorTol           float64
+	HeightAtStart      float64
+	HeightAtEnd        float64
+	LastResistanceIdx  int
+	LastValleyIdx      int
+	PEnd               int
+	PatternWidth       float64
+}
+
 type AscendingTriangleResult struct {
 	Found                 bool
 	ResistanceLevel       float64
@@ -17,6 +50,7 @@ type AscendingTriangleResult struct {
 	SupportSlope          float64
 	SupportIntercept      float64
 	SupportTouchPoints    []SwingPoint
+	Debug                 DebugInfo
 }
 
 func DetectAscendingTriangle(candles []Candle, rejectStats map[string]*int) AscendingTriangleResult {
@@ -34,22 +68,30 @@ func reject(reason string, stats map[string]*int) AscendingTriangleResult {
 }
 
 func detectAscendingTriangle(candles []Candle, rejectStats map[string]*int) AscendingTriangleResult {
-	const swingRadius = 3
+	var dbg DebugInfo
 
-	atr := calcATR(candles)
 	avgPrice := 0.0
 	for _, c := range candles {
 		avgPrice += c.Close
 	}
 	avgPrice /= float64(len(candles))
-	vol := atr / avgPrice
 
+	atr := calcATR(candles)
+	vol := atr / avgPrice
+	dbg.AvgPrice = avgPrice
+	dbg.ATR = atr
+	dbg.Vol = vol
+
+	const swingRadius = 3
 	swingHighs := findSwingHighs(candles, swingRadius)
+	dbg.SwingHighsCount = len(swingHighs)
 	if len(swingHighs) < 2 {
 		return reject("01_few_swing_highs", rejectStats)
 	}
 
 	resistanceLevel, resistanceTouches, resistanceTouchPoints := findHorizontalResistance(candles, swingHighs, vol)
+	dbg.ResistanceLevel = resistanceLevel
+	dbg.ResistanceTouches = resistanceTouches
 	if resistanceTouches < 3 {
 		return reject("02_resistance_<3_touches", rejectStats)
 	}
@@ -57,6 +99,9 @@ func detectAscendingTriangle(candles []Candle, rejectStats map[string]*int) Asce
 	firstTouchIdx := resistanceTouchPoints[0].Index
 	highAboveThreshold := resistanceLevel * (1 + vol*0.5)
 	crashThreshold := resistanceLevel * (1 - math.Max(0.05, vol*8))
+	dbg.FirstTouchIdx = firstTouchIdx
+	dbg.HighAboveThreshold = highAboveThreshold
+	dbg.CrashThreshold = crashThreshold
 	for i := 0; i < firstTouchIdx; i++ {
 		if candles[i].High > highAboveThreshold {
 			return reject("03_high_before_first_touch", rejectStats)
@@ -71,6 +116,7 @@ func detectAscendingTriangle(candles []Candle, rejectStats map[string]*int) Asce
 	}
 
 	valleys := findValleysBetweenTouches(candles, resistanceTouchPoints)
+	dbg.ValleysCount = len(valleys)
 	if len(valleys) < 2 {
 		return reject("06_few_valleys", rejectStats)
 	}
@@ -85,11 +131,14 @@ func detectAscendingTriangle(candles []Candle, rejectStats map[string]*int) Asce
 			}
 		}
 	}
+	dbg.FirstVIdx = firstVIdx
+	dbg.MaxCrashRange = maxCrashRange
 	if maxCrashRange > math.Max(0.015, vol*4) {
 		return reject("20_first_valley_crash", rejectStats)
 	}
 
 	allowedFlat := vol * 1.5
+	dbg.AllowedFlat = allowedFlat
 	for i := 1; i < len(valleys); i++ {
 		if valleys[i].Value < valleys[i-1].Value*(1-allowedFlat) {
 			return reject("07_valley_not_rising", rejectStats)
@@ -97,11 +146,14 @@ func detectAscendingTriangle(candles []Candle, rejectStats map[string]*int) Asce
 	}
 
 	supportSlope, supportIntercept := linearRegression(valleys)
+	dbg.SupportSlope = supportSlope
+	dbg.SupportIntercept = supportIntercept
 	if supportSlope <= 0 {
 		return reject("08_negative_slope", rejectStats)
 	}
 
 	maxValleyDepth := math.Max(0.015, vol*5)
+	dbg.MaxValleyDepth = maxValleyDepth
 	for _, v := range valleys {
 		if v.Value < resistanceLevel*(1-maxValleyDepth) {
 			return reject("09_valley_too_deep", rejectStats)
@@ -115,6 +167,7 @@ func detectAscendingTriangle(candles []Candle, rejectStats map[string]*int) Asce
 	}
 
 	valleyDeviation := math.Max(0.0015, vol*1.0)
+	dbg.ValleyDeviation = valleyDeviation
 	for _, v := range valleys {
 		expected := supportSlope*float64(v.Index) + supportIntercept
 		if expected > 0 && math.Abs(v.Value-expected)/expected > valleyDeviation {
@@ -127,15 +180,21 @@ func detectAscendingTriangle(candles []Candle, rejectStats map[string]*int) Asce
 		patternStart = valleys[0].Index
 	}
 	patternEnd := len(candles) - 1
+	dbg.PatternStart = patternStart
+	dbg.PatternEnd = patternEnd
 
 	xIntersect := (resistanceLevel - supportIntercept) / supportSlope
 	lastX := float64(len(candles) - 1)
+	dbg.XIntersect = xIntersect
+	dbg.LastX = lastX
 	if xIntersect <= lastX {
 		return reject("12_no_convergence", rejectStats)
 	}
 
 	ceilingTol := math.Max(0.002, vol*0.7)
 	ceiling := resistanceLevel * (1 + ceilingTol)
+	dbg.CeilingTol = ceilingTol
+	dbg.Ceiling = ceiling
 	for i := patternStart; i <= patternEnd; i++ {
 		if candles[i].High > ceiling {
 			return reject("13_breaks_ceiling", rejectStats)
@@ -143,6 +202,7 @@ func detectAscendingTriangle(candles []Candle, rejectStats map[string]*int) Asce
 	}
 
 	floorTol := math.Max(0.0015, vol*0.5)
+	dbg.FloorTol = floorTol
 	for i := patternStart; i <= patternEnd; i++ {
 		supportVal := supportSlope*float64(i) + supportIntercept
 		if candles[i].Low < supportVal*(1-floorTol) {
@@ -158,6 +218,8 @@ func detectAscendingTriangle(candles []Candle, rejectStats map[string]*int) Asce
 
 	heightAtStart := resistanceLevel - (supportSlope*float64(patternStart) + supportIntercept)
 	heightAtEnd := resistanceLevel - (supportSlope*float64(patternEnd) + supportIntercept)
+	dbg.HeightAtStart = heightAtStart
+	dbg.HeightAtEnd = heightAtEnd
 	if heightAtEnd <= 0 || heightAtEnd >= heightAtStart*0.7 {
 		return reject("16_not_narrowing", rejectStats)
 	}
@@ -172,11 +234,15 @@ func detectAscendingTriangle(candles []Candle, rejectStats map[string]*int) Asce
 	if lastValleyIdx > pEnd {
 		pEnd = lastValleyIdx
 	}
+	dbg.LastResistanceIdx = lastResistanceIdx
+	dbg.LastValleyIdx = lastValleyIdx
+	dbg.PEnd = pEnd
 	if pEnd-patternStart < 15 {
 		return reject("18_too_narrow", rejectStats)
 	}
 
 	patternWidth := float64(pEnd - patternStart)
+	dbg.PatternWidth = patternWidth
 	if xIntersect > lastX+patternWidth*2 {
 		return reject("19_apex_too_far", rejectStats)
 	}
@@ -189,6 +255,7 @@ func detectAscendingTriangle(candles []Candle, rejectStats map[string]*int) Asce
 		SupportSlope:          supportSlope,
 		SupportIntercept:      supportIntercept,
 		SupportTouchPoints:    valleys,
+		Debug:                 dbg,
 	}
 }
 
@@ -210,10 +277,11 @@ func findSwingHighs(candles []Candle, radius int) []SwingPoint {
 }
 
 func calcATR(candles []Candle) float64 {
-	if len(candles) < 2 {
-		return candles[0].High - candles[0].Low
-	}
 	sum := candles[0].High - candles[0].Low
+	if len(candles) < 2 {
+		return sum
+	}
+
 	for i := 1; i < len(candles); i++ {
 		tr := candles[i].High - candles[i].Low
 		d1 := math.Abs(candles[i].High - candles[i-1].Close)
