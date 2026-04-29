@@ -44,7 +44,6 @@ type DebugInfo struct {
 
 type AscendingTriangleResult struct {
 	Found                 bool
-	RejectReason          string
 	ResistanceLevel       float64
 	ResistanceTouches     int
 	ResistanceTouchPoints []SwingPoint
@@ -86,7 +85,7 @@ func reject(reason string, stats map[string]*int) AscendingTriangleResult {
 	}
 	*stats[reason]++
 
-	return AscendingTriangleResult{RejectReason: reason}
+	return AscendingTriangleResult{}
 }
 
 func detectAscendingTriangle(candles []Candle, rejectStats map[string]*int) AscendingTriangleResult {
@@ -224,12 +223,6 @@ func detectAscendingTriangle(candles []Candle, rejectStats map[string]*int) Asce
 		return reject("08_negative_slope", rejectStats)
 	}
 
-	valleySpan := float64(valleys[len(valleys)-1].Index - valleys[0].Index)
-	minSlopeRise := resistanceLevel * math.Max(0.004, vol*1.2)
-	if supportSlope*valleySpan < minSlopeRise {
-		return reject("21_slope_too_shallow", rejectStats)
-	}
-
 	maxValleyDepth := math.Max(0.015, vol*5)
 	dbg.MaxValleyDepth = maxValleyDepth
 	for _, v := range valleys {
@@ -309,32 +302,6 @@ func detectAscendingTriangle(candles []Candle, rejectStats map[string]*int) Asce
 	dbg.HeightAtEnd = heightAtEnd
 	if heightAtEnd <= 0 || heightAtEnd >= heightAtStart*0.7 {
 		return reject("16_not_narrowing", rejectStats)
-	}
-
-	firstValleyValue := valleys[0].Value
-	lastValleyValue := valleys[len(valleys)-1].Value
-	initialGap := resistanceLevel - firstValleyValue
-	actualRise := lastValleyValue - firstValleyValue
-	if initialGap <= 0 || actualRise < initialGap*0.4 {
-		return reject("22_lows_not_rising_enough", rejectStats)
-	}
-
-	midIdx := (patternStart + patternEnd) / 2
-	firstHalfMinLow := math.MaxFloat64
-	secondHalfMinLow := math.MaxFloat64
-	for i := patternStart; i <= midIdx; i++ {
-		if candles[i].Low < firstHalfMinLow {
-			firstHalfMinLow = candles[i].Low
-		}
-	}
-	for i := midIdx + 1; i <= patternEnd; i++ {
-		if candles[i].Low < secondHalfMinLow {
-			secondHalfMinLow = candles[i].Low
-		}
-	}
-	minLowRise := math.Max(0.005, vol*1.5)
-	if firstHalfMinLow > 0 && secondHalfMinLow < firstHalfMinLow*(1+minLowRise) {
-		return reject("23_second_half_lows_too_low", rejectStats)
 	}
 
 	if heightAtStart < resistanceLevel*0.005 {

@@ -11,6 +11,7 @@ func RenderTriangleDetection(
 	renderer.RenderCandles(candles)
 
 	if !result.Found {
+		fmt.Println("Pattern not found. Saving clean chart.")
 		return renderer.Export(outputPath)
 	}
 
@@ -40,6 +41,10 @@ func RenderTriangleDetection(
 	)
 
 	renderer.DrawScatterMarkers(result.SupportTouchPoints, "Support touches", "#44dd44")
+
+	fmt.Println("Pattern found!")
+	fmt.Printf("  Resistance : %.2f\n", result.ResistanceLevel)
+	fmt.Printf("  Support slope : %.4f\n", result.SupportSlope)
 
 	return renderer.Export(outputPath)
 }
