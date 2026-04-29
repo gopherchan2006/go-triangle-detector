@@ -44,6 +44,7 @@ type DebugInfo struct {
 
 type AscendingTriangleResult struct {
 	Found                 bool
+	RejectReason          string
 	ResistanceLevel       float64
 	ResistanceTouches     int
 	ResistanceTouchPoints []SwingPoint
@@ -64,7 +65,7 @@ func reject(reason string, stats map[string]*int) AscendingTriangleResult {
 	}
 	*stats[reason]++
 
-	return AscendingTriangleResult{}
+	return AscendingTriangleResult{RejectReason: reason}
 }
 
 func detectAscendingTriangle(candles []Candle, rejectStats map[string]*int) AscendingTriangleResult {
