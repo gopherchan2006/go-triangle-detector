@@ -9,6 +9,47 @@ import (
 	"strings"
 )
 
+func writeDebugFile(pngPath string, result AscendingTriangleResult) {
+	d := result.Debug
+	txtPath := strings.TrimSuffix(pngPath, ".png") + ".txt"
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("avgPrice            = %.6f\n", d.AvgPrice))
+	sb.WriteString(fmt.Sprintf("atr                 = %.6f\n", d.ATR))
+	sb.WriteString(fmt.Sprintf("vol                 = %.8f\n", d.Vol))
+	sb.WriteString(fmt.Sprintf("swingHighsCount     = %d\n", d.SwingHighsCount))
+	sb.WriteString(fmt.Sprintf("resistanceLevel     = %.6f\n", d.ResistanceLevel))
+	sb.WriteString(fmt.Sprintf("resistanceTouches   = %d\n", d.ResistanceTouches))
+	sb.WriteString(fmt.Sprintf("firstTouchIdx       = %d\n", d.FirstTouchIdx))
+	sb.WriteString(fmt.Sprintf("highAboveThreshold  = %.6f\n", d.HighAboveThreshold))
+	sb.WriteString(fmt.Sprintf("crashThreshold      = %.6f\n", d.CrashThreshold))
+	sb.WriteString(fmt.Sprintf("valleysCount        = %d\n", d.ValleysCount))
+	sb.WriteString(fmt.Sprintf("firstVIdx           = %d\n", d.FirstVIdx))
+	sb.WriteString(fmt.Sprintf("maxCrashRange       = %.8f\n", d.MaxCrashRange))
+	sb.WriteString(fmt.Sprintf("allowedFlat         = %.8f\n", d.AllowedFlat))
+	sb.WriteString(fmt.Sprintf("supportSlope        = %.8f\n", d.SupportSlope))
+	sb.WriteString(fmt.Sprintf("supportIntercept    = %.6f\n", d.SupportIntercept))
+	sb.WriteString(fmt.Sprintf("maxValleyDepth      = %.8f\n", d.MaxValleyDepth))
+	sb.WriteString(fmt.Sprintf("valleyDeviation     = %.8f\n", d.ValleyDeviation))
+	sb.WriteString(fmt.Sprintf("patternStart        = %d\n", d.PatternStart))
+	sb.WriteString(fmt.Sprintf("patternEnd          = %d\n", d.PatternEnd))
+	sb.WriteString(fmt.Sprintf("xIntersect          = %.4f\n", d.XIntersect))
+	sb.WriteString(fmt.Sprintf("lastX               = %.4f\n", d.LastX))
+	sb.WriteString(fmt.Sprintf("ceilingTol          = %.8f\n", d.CeilingTol))
+	sb.WriteString(fmt.Sprintf("ceiling             = %.6f\n", d.Ceiling))
+	sb.WriteString(fmt.Sprintf("floorTol            = %.8f\n", d.FloorTol))
+	sb.WriteString(fmt.Sprintf("heightAtStart       = %.6f\n", d.HeightAtStart))
+	sb.WriteString(fmt.Sprintf("heightAtEnd         = %.6f\n", d.HeightAtEnd))
+	sb.WriteString(fmt.Sprintf("lastResistanceIdx   = %d\n", d.LastResistanceIdx))
+	sb.WriteString(fmt.Sprintf("lastValleyIdx       = %d\n", d.LastValleyIdx))
+	sb.WriteString(fmt.Sprintf("pEnd                = %d\n", d.PEnd))
+	sb.WriteString(fmt.Sprintf("patternWidth        = %.4f\n", d.PatternWidth))
+
+	if err := os.WriteFile(txtPath, []byte(sb.String()), 0o644); err != nil {
+		log.Printf("writeDebugFile: %v", err)
+	}
+}
+
 func main() {
 	symbol := flag.String("symbol", "", "Trading pair symbol, e.g. BTCUSDT")
 	interval := flag.String("interval", "", "Candle interval, e.g. 15m")
@@ -146,6 +187,7 @@ func analyzeSymbol(symbol, interval, startDate, endDate string, dataDir string, 
 			if err := ss.Screenshot(htmlTmp, pngFile); err != nil {
 				log.Printf("[%s] error taking screenshot for %s: %v", symbol, dateStr, err)
 			}
+			writeDebugFile(pngFile, result)
 			_ = os.Remove(htmlTmp)
 
 			fmt.Printf("[%s] [Pattern #%d] %s | Resistance: %.2f | Support slope: %.4f\n",
