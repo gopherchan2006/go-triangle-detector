@@ -51,6 +51,27 @@ type AscendingTriangleResult struct {
 	SupportIntercept      float64
 	SupportTouchPoints    []SwingPoint
 	Debug                 DebugInfo
+
+	// Trading signals — derived after geometric pattern is confirmed.
+	// Populated only when Found == true.
+	//
+	// TargetPrice: classical projection target for an ascending triangle.
+	// Pattern height at formation = resistance - first valley. The target
+	// is that same height projected above the resistance line.
+	TargetPrice float64
+
+	// BreakoutDetected: last candle's close has crossed above the
+	// resistance level by the breakout tolerance. The pattern is reported
+	// even when this is true (so callers see the breakout signal); the
+	// detection rules in findHorizontalResistance and rule 13 are tuned
+	// to allow the *final* candle to be a fresh breakout candle.
+	BreakoutDetected bool
+
+	// BreakoutVolumeRatio: last candle's volume divided by the average
+	// volume of the prior 19 candles. A value >= 1.5 is the textbook
+	// confirmation that the breakout has real participation. Zero when
+	// breakout is not detected or when there is not enough history.
+	BreakoutVolumeRatio float64
 }
 
 func DetectAscendingTriangle(candles []Candle, rejectStats map[string]*int) AscendingTriangleResult {
@@ -115,6 +136,28 @@ func detectAscendingTriangle(candles []Candle, rejectStats map[string]*int) Asce
 		return reject("05_first_touch_too_late", rejectStats)
 	}
 
+	// 24_preceding_trend_not_up — ascending triangles are continuation
+	// patterns of an existing uptrend. The candles before the first
+	// resistance touch should be moving up into that resistance, not
+	// drifting sideways or falling. Rule 03 already forbids highs above
+	// resistance and rule 04 forbids crashes, but neither requires a
+	// positive trend. Without this check, the same flat-top + flat-bottom
+	// box can trigger a "triangle" if the geometry happens to fit.
+	//
+	// Implementation: linear regression on the closes of all candles
+	// before firstTouchIdx. We require slope > 0. We skip the check if
+	// there is not enough pre-pattern data to fit a line meaningfully.
+	if firstTouchIdx >= 5 {
+		prePoints := make([]SwingPoint, 0, firstTouchIdx)
+		for i := range firstTouchIdx {
+			prePoints = append(prePoints, SwingPoint{Index: i, Value: candles[i].Close})
+		}
+		preSlope, _ := linearRegression(prePoints)
+		if preSlope <= 0 {
+			return reject("24_preceding_trend_not_up", rejectStats)
+		}
+	}
+
 	valleys := findValleysBetweenTouches(candles, resistanceTouchPoints)
 	dbg.ValleysCount = len(valleys)
 	if len(valleys) < 2 {
@@ -142,6 +185,34 @@ func detectAscendingTriangle(candles []Candle, rejectStats map[string]*int) Asce
 	for i := 1; i < len(valleys); i++ {
 		if valleys[i].Value < valleys[i-1].Value*(1-allowedFlat) {
 			return reject("07_valley_not_rising", rejectStats)
+		}
+	}
+
+	// 21_first_valley_not_floor — distinguishes ascending triangles from
+	// flat consolidations.
+	//
+	// In a true ascending triangle the FIRST valley defines the lowest
+	// point and every subsequent valley sits at or above it (with minor
+	// noise). In a flat market lows oscillate around a horizontal support,
+	// so the lowest valley can appear anywhere in the pattern.
+	//
+	// This is intentionally orthogonal to the existing rules:
+	//   - 07 checks only CONSECUTIVE pairs, so a valley can still dip
+	//     below valley[0] if no single step is steep.
+	//   - 08/16/17 measure the regression line's slope/narrowing; that
+	//     line can be skewed positive by a few well-placed valleys even
+	//     when the raw sequence oscillates.
+	//   - 09 bounds depth relative to the resistance level, not relative
+	//     to the first valley.
+	//
+	// We compare the detected swing valleys (not raw candle lows) so
+	// isolated tail-wick noise does not trigger this. The tolerance is
+	// ratio-based so genuinely narrow but valid triangles are not
+	// penalized — only oscillation below the established floor is.
+	floorTolerance := math.Max(0.003, vol)
+	for i := 1; i < len(valleys); i++ {
+		if valleys[i].Value < valleys[0].Value*(1-floorTolerance) {
+			return reject("21_first_valley_not_floor", rejectStats)
 		}
 	}
 
@@ -191,11 +262,20 @@ func detectAscendingTriangle(candles []Candle, rejectStats map[string]*int) Asce
 		return reject("12_no_convergence", rejectStats)
 	}
 
+	// 13_breaks_ceiling — no candle's high may pierce the resistance by
+	// more than ceilingTol. We deliberately exclude the LAST candle:
+	// when the pattern is captured at the moment of breakout, the final
+	// candle's high will exceed the ceiling — that is the breakout signal,
+	// not a violation. Mid-pattern ceiling breaks still reject normally.
 	ceilingTol := math.Max(0.002, vol*0.7)
 	ceiling := resistanceLevel * (1 + ceilingTol)
 	dbg.CeilingTol = ceilingTol
 	dbg.Ceiling = ceiling
-	for i := patternStart; i <= patternEnd; i++ {
+	ceilingEnd := patternEnd
+	if ceilingEnd == len(candles)-1 {
+		ceilingEnd = patternEnd - 1
+	}
+	for i := patternStart; i <= ceilingEnd; i++ {
 		if candles[i].High > ceiling {
 			return reject("13_breaks_ceiling", rejectStats)
 		}
@@ -247,6 +327,64 @@ func detectAscendingTriangle(candles []Candle, rejectStats map[string]*int) Asce
 		return reject("19_apex_too_far", rejectStats)
 	}
 
+	// 25_volume_not_declining — during a healthy ascending triangle volume
+	// dries up as price coils into the apex (fewer participants want to
+	// trade in the narrowing range). A pattern formed under rising volume
+	// is more likely to be an active accumulation/distribution zone than a
+	// classic continuation triangle.
+	//
+	// We fit a line through volumes from patternStart..pEnd and normalize
+	// the slope by the average volume to get a per-candle percentage rate.
+	// Strict "slope < 0" is too aggressive given how noisy volume is, so
+	// we only reject when volume is *materially* rising (> 1% per candle,
+	// roughly +30% across a 30-candle window). Patterns with flat or
+	// declining volume pass.
+	if pEnd-patternStart >= 10 {
+		volPoints := make([]SwingPoint, 0, pEnd-patternStart+1)
+		volSum := 0.0
+		for i := patternStart; i <= pEnd; i++ {
+			volPoints = append(volPoints, SwingPoint{Index: i, Value: candles[i].Volume})
+			volSum += candles[i].Volume
+		}
+		avgVol := volSum / float64(len(volPoints))
+		volSlope, _ := linearRegression(volPoints)
+		if avgVol > 0 && volSlope/avgVol > 0.01 {
+			return reject("25_volume_not_declining", rejectStats)
+		}
+	}
+
+	// Target price — classical projection: pattern height (resistance
+	// minus the lowest support point, i.e. first valley) added on top of
+	// the resistance level. This is the price that a textbook breakout
+	// trade would aim for, derived purely from the geometry already
+	// validated above.
+	targetPrice := resistanceLevel + (resistanceLevel - valleys[0].Value)
+
+	// Breakout detection on the LAST candle. The geometric rules above
+	// have been tuned so that a breakout in the final candle does not
+	// invalidate the pattern (see comments on rule 13 and on
+	// findHorizontalResistance's grace period). If the last close is
+	// above resistance by the standard 0.5% tolerance, we report a
+	// breakout and compute the volume confirmation ratio against the
+	// prior 19 candles' average volume. Ratio >= 1.5 is the canonical
+	// confirmation threshold; the caller decides how to act on it.
+	n := len(candles)
+	breakoutDetected := candles[n-1].Close > resistanceLevel*1.005
+	breakoutVolumeRatio := 0.0
+	if breakoutDetected {
+		volStart := max(n-20, 0)
+		sum := 0.0
+		count := 0
+		for i := volStart; i < n-1; i++ {
+			sum += candles[i].Volume
+			count++
+		}
+		if count > 0 && sum > 0 {
+			avgVol := sum / float64(count)
+			breakoutVolumeRatio = candles[n-1].Volume / avgVol
+		}
+	}
+
 	return AscendingTriangleResult{
 		Found:                 true,
 		ResistanceLevel:       resistanceLevel,
@@ -256,6 +394,9 @@ func detectAscendingTriangle(candles []Candle, rejectStats map[string]*int) Asce
 		SupportIntercept:      supportIntercept,
 		SupportTouchPoints:    valleys,
 		Debug:                 dbg,
+		TargetPrice:           targetPrice,
+		BreakoutDetected:      breakoutDetected,
+		BreakoutVolumeRatio:   breakoutVolumeRatio,
 	}
 }
 
@@ -416,8 +557,14 @@ func findHorizontalResistance(candles []Candle, highs []SwingPoint, vol float64)
 		}
 	}
 
+	// After-touch close check — any close above resistance between the
+	// last touch and the end of the window invalidates the pattern,
+	// EXCEPT for the very last candle. We treat the final candle as a
+	// potential fresh breakout candle: allowing it to close above the
+	// resistance is what makes downstream breakout detection possible.
+	// Mid-period breakouts (anywhere except the last index) still reject.
 	lastIdx := bestTouchPoints[len(bestTouchPoints)-1].Index
-	for j := lastIdx; j < len(candles); j++ {
+	for j := lastIdx; j < len(candles)-1; j++ {
 		if candles[j].Close > bestLevel*(1+breakout) {
 			return 0, 0, nil
 		}

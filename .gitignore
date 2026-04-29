@@ -49,3 +49,5 @@ tmp/
 # Build artifacts
 triangle-detector
 triangle-detector.exe
+CLAUDE.md
+description.md
