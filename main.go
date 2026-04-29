@@ -189,25 +189,27 @@ func analyzeSymbol(symbol, interval, startDate, endDate string, dataDir string, 
 		if result.Found {
 			patterns++
 			timestamp := window[0].Timestamp
-			dateStr := timestamp.Format("2006-01-02")
+			fileDate := timestamp.Format("2006-01-02")
+			labelDate := timestamp.Format("2006-01-02 15:04:05")
 
-			htmlTmp := filepath.Join(chartDir, fmt.Sprintf("%s_%s.tmp.html", symbol, dateStr))
-			pngFile := filepath.Join(chartDir, fmt.Sprintf("%s_%s.png", symbol, dateStr))
+			htmlTmp := filepath.Join(chartDir, fmt.Sprintf("%s_%s.tmp.html", symbol, fileDate))
+			pngFile := filepath.Join(chartDir, fmt.Sprintf("%s_%s.png", symbol, fileDate))
 
 			renderer := NewEChartsRenderer()
+			renderer.SetLabel(symbol, labelDate)
 			if err := RenderTriangleDetection(window, result, renderer, htmlTmp); err != nil {
-				log.Printf("[%s] error rendering chart for %s: %v", symbol, dateStr, err)
+				log.Printf("[%s] error rendering chart for %s: %v", symbol, fileDate, err)
 				_ = os.Remove(htmlTmp)
 				continue
 			}
 			if err := ss.Screenshot(htmlTmp, pngFile); err != nil {
-				log.Printf("[%s] error taking screenshot for %s: %v", symbol, dateStr, err)
+				log.Printf("[%s] error taking screenshot for %s: %v", symbol, fileDate, err)
 			}
 			writeDebugFile(pngFile, result)
 			_ = os.Remove(htmlTmp)
 
 			fmt.Printf("[%s] [Pattern #%d] %s | Resistance: %.2f | Support slope: %.4f\n",
-				symbol, patterns, dateStr, result.ResistanceLevel, result.SupportSlope)
+				symbol, patterns, labelDate, result.ResistanceLevel, result.SupportSlope)
 
 		} else if rejectLimit > 0 && result.RejectReason != "" {
 			reason := result.RejectReason
@@ -216,7 +218,8 @@ func analyzeSymbol(symbol, interval, startDate, endDate string, dataDir string, 
 			}
 
 			timestamp := window[0].Timestamp
-			dateStr := timestamp.Format("2006-01-02")
+			fileDate := timestamp.Format("2006-01-02")
+			labelDate := timestamp.Format("2006-01-02 15:04:05")
 
 			safeReason := sanitizeReason(reason)
 			rejectDir := filepath.Join("tmp", "rejects", safeReason, symbol)
@@ -225,8 +228,8 @@ func analyzeSymbol(symbol, interval, startDate, endDate string, dataDir string, 
 				continue
 			}
 
-			htmlTmp := filepath.Join(rejectDir, fmt.Sprintf("%s_%s.tmp.html", symbol, dateStr))
-			pngFile := filepath.Join(rejectDir, fmt.Sprintf("%s_%s.png", symbol, dateStr))
+			htmlTmp := filepath.Join(rejectDir, fmt.Sprintf("%s_%s.tmp.html", symbol, fileDate))
+			pngFile := filepath.Join(rejectDir, fmt.Sprintf("%s_%s.png", symbol, fileDate))
 
 			// Skip if chart for this date already saved (multiple windows on same day)
 			if _, statErr := os.Stat(pngFile); statErr == nil {
@@ -234,12 +237,13 @@ func analyzeSymbol(symbol, interval, startDate, endDate string, dataDir string, 
 			}
 
 			renderer := NewEChartsRenderer()
+			renderer.SetLabel(symbol, labelDate)
 			if err := RenderTriangleDetection(window, result, renderer, htmlTmp); err != nil {
 				_ = os.Remove(htmlTmp)
 				continue
 			}
 			if err := ss.Screenshot(htmlTmp, pngFile); err != nil {
-				log.Printf("[%s] reject chart error for %s/%s: %v", symbol, reason, dateStr, err)
+				log.Printf("[%s] reject chart error for %s/%s: %v", symbol, reason, fileDate, err)
 			}
 			_ = os.Remove(htmlTmp)
 
