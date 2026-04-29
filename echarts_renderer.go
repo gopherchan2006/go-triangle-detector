@@ -36,10 +36,17 @@ type EChartsRenderer struct {
 	timestamps []string
 	overlays   []overlay
 	stats      []string
+	symbol     string
+	dateStr    string
 }
 
 func NewEChartsRenderer() *EChartsRenderer {
 	return &EChartsRenderer{}
+}
+
+func (r *EChartsRenderer) SetLabel(symbol, dateStr string) {
+	r.symbol = symbol
+	r.dateStr = dateStr
 }
 
 func (r *EChartsRenderer) AddStat(key, value string) {
@@ -138,13 +145,20 @@ func (r *EChartsRenderer) buildSubtitle() string {
 func (r *EChartsRenderer) buildKlineChart() *charts.Kline {
 	kline := charts.NewKLine()
 
+	title := "Ascending Triangle Detector"
+	if r.symbol != "" && r.dateStr != "" {
+		title = r.symbol + "  ·  " + r.dateStr
+	} else if r.symbol != "" {
+		title = r.symbol
+	}
+
 	kline.SetGlobalOptions(
 		charts.WithInitializationOpts(opts.Initialization{
 			Width:  "1400px",
 			Height: "700px",
 		}),
 		charts.WithTitleOpts(opts.Title{
-			Title:    "Horizontal Resistance Detector",
+			Title:    title,
 			Subtitle: r.buildSubtitle(),
 		}),
 		charts.WithTooltipOpts(opts.Tooltip{
