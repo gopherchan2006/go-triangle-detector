@@ -34,16 +34,16 @@ func reject(reason string, stats map[string]*int) AscendingTriangleResult {
 }
 
 func detectAscendingTriangle(candles []Candle, rejectStats map[string]*int) AscendingTriangleResult {
-	const swingRadius = 3
-
-	atr := calcATR(candles)
 	avgPrice := 0.0
 	for _, c := range candles {
 		avgPrice += c.Close
 	}
 	avgPrice /= float64(len(candles))
+
+	atr := calcATR(candles)
 	vol := atr / avgPrice
 
+	const swingRadius = 3
 	swingHighs := findSwingHighs(candles, swingRadius)
 	if len(swingHighs) < 2 {
 		return reject("01_few_swing_highs", rejectStats)
@@ -210,10 +210,11 @@ func findSwingHighs(candles []Candle, radius int) []SwingPoint {
 }
 
 func calcATR(candles []Candle) float64 {
-	if len(candles) < 2 {
-		return candles[0].High - candles[0].Low
-	}
 	sum := candles[0].High - candles[0].Low
+	if len(candles) < 2 {
+		return sum
+	}
+
 	for i := 1; i < len(candles); i++ {
 		tr := candles[i].High - candles[i].Low
 		d1 := math.Abs(candles[i].High - candles[i-1].Close)
