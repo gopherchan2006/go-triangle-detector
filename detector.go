@@ -46,6 +46,26 @@ type DebugInfo struct {
 	PatternWidth       float64
 }
 
+type CalcATRBarTrace struct {
+	Index                 int
+	FirstBar              bool
+	O, H, L, C, PrevClose float64
+
+	HighLow  float64
+	D1, D2   float64
+	D1TookTR bool
+	D2TookTR bool
+	TR       float64
+	SumTR    float64
+}
+
+type CalcATRDebugSnapshot struct {
+	BarCount int
+	Bars     []CalcATRBarTrace
+	SumTR    float64
+	ATR      float64
+}
+
 type AscendingTriangleResult struct {
 	Found                 bool
 	RejectReason          string
@@ -56,26 +76,8 @@ type AscendingTriangleResult struct {
 	SupportIntercept      float64
 	SupportTouchPoints    []SwingPoint
 	Debug                 DebugInfo
-
-	// Trading signals — derived after geometric pattern is confirmed.
-	// Populated only when Found == true.
-	//
-	// TargetPrice: classical projection target for an ascending triangle.
-	// Pattern height at formation = resistance - first valley. The target
-	// is that same height projected above the resistance line.
-	TargetPrice float64
-
-	// BreakoutDetected: last candle's close has crossed above the
-	// resistance level by the breakout tolerance. The pattern is reported
-	// even when this is true (so callers see the breakout signal); the
-	// detection rules in findHorizontalResistance and rule 13 are tuned
-	// to allow the *final* candle to be a fresh breakout candle.
-	BreakoutDetected bool
-
-	// BreakoutVolumeRatio: last candle's volume divided by the average
-	// volume of the prior 19 candles. A value >= 1.5 is the textbook
-	// confirmation that the breakout has real participation. Zero when
-	// breakout is not detected or when there is not enough history.
+	TargetPrice         float64
+	BreakoutDetected    bool
 	BreakoutVolumeRatio float64
 }
 
@@ -102,12 +104,12 @@ func detectAscendingTriangle(candles []Candle, rejectStats map[string]*int) Asce
 	}
 	avgPrice /= float64(len(candles))
 
-	atr, atrLog := calcATRDebug(candles)
-	vol := atr / avgPrice
+	atrSnap := collectCalcATRDebug(candles)
+	vol := atrSnap.ATR / avgPrice
 	dbg.AvgPrice = avgPrice
-	dbg.ATR = atr
+	dbg.ATR = atrSnap.ATR
 	dbg.Vol = vol
-	dbg.CalcATRLog = atrLog
+	dbg.CalcATRLog = formatCalcATRDebug(atrSnap)
 
 	const swingRadius = 3
 	swingHighs := findSwingHighs(candles, swingRadius)
@@ -142,17 +144,6 @@ func detectAscendingTriangle(candles []Candle, rejectStats map[string]*int) Asce
 		return reject("05_first_touch_too_late", rejectStats)
 	}
 
-	// 24_preceding_trend_not_up — ascending triangles are continuation
-	// patterns of an existing uptrend. The candles before the first
-	// resistance touch should be moving up into that resistance, not
-	// drifting sideways or falling. Rule 03 already forbids highs above
-	// resistance and rule 04 forbids crashes, but neither requires a
-	// positive trend. Without this check, the same flat-top + flat-bottom
-	// box can trigger a "triangle" if the geometry happens to fit.
-	//
-	// Implementation: linear regression on the closes of all candles
-	// before firstTouchIdx. We require slope > 0. We skip the check if
-	// there is not enough pre-pattern data to fit a line meaningfully.
 	if firstTouchIdx >= 5 {
 		prePoints := make([]SwingPoint, 0, firstTouchIdx)
 		for i := range firstTouchIdx {
@@ -194,27 +185,6 @@ func detectAscendingTriangle(candles []Candle, rejectStats map[string]*int) Asce
 		}
 	}
 
-	// 21_first_valley_not_floor — distinguishes ascending triangles from
-	// flat consolidations.
-	//
-	// In a true ascending triangle the FIRST valley defines the lowest
-	// point and every subsequent valley sits at or above it (with minor
-	// noise). In a flat market lows oscillate around a horizontal support,
-	// so the lowest valley can appear anywhere in the pattern.
-	//
-	// This is intentionally orthogonal to the existing rules:
-	//   - 07 checks only CONSECUTIVE pairs, so a valley can still dip
-	//     below valley[0] if no single step is steep.
-	//   - 08/16/17 measure the regression line's slope/narrowing; that
-	//     line can be skewed positive by a few well-placed valleys even
-	//     when the raw sequence oscillates.
-	//   - 09 bounds depth relative to the resistance level, not relative
-	//     to the first valley.
-	//
-	// We compare the detected swing valleys (not raw candle lows) so
-	// isolated tail-wick noise does not trigger this. The tolerance is
-	// ratio-based so genuinely narrow but valid triangles are not
-	// penalized — only oscillation below the established floor is.
 	floorTolerance := math.Max(0.003, vol)
 	for i := 1; i < len(valleys); i++ {
 		if valleys[i].Value < valleys[0].Value*(1-floorTolerance) {
@@ -268,11 +238,6 @@ func detectAscendingTriangle(candles []Candle, rejectStats map[string]*int) Asce
 		return reject("12_no_convergence", rejectStats)
 	}
 
-	// 13_breaks_ceiling — no candle's high may pierce the resistance by
-	// more than ceilingTol. We deliberately exclude the LAST candle:
-	// when the pattern is captured at the moment of breakout, the final
-	// candle's high will exceed the ceiling — that is the breakout signal,
-	// not a violation. Mid-pattern ceiling breaks still reject normally.
 	ceilingTol := math.Max(0.002, vol*0.7)
 	ceiling := resistanceLevel * (1 + ceilingTol)
 	dbg.CeilingTol = ceilingTol
@@ -333,18 +298,6 @@ func detectAscendingTriangle(candles []Candle, rejectStats map[string]*int) Asce
 		return reject("19_apex_too_far", rejectStats)
 	}
 
-	// 25_volume_not_declining — during a healthy ascending triangle volume
-	// dries up as price coils into the apex (fewer participants want to
-	// trade in the narrowing range). A pattern formed under rising volume
-	// is more likely to be an active accumulation/distribution zone than a
-	// classic continuation triangle.
-	//
-	// We fit a line through volumes from patternStart..pEnd and normalize
-	// the slope by the average volume to get a per-candle percentage rate.
-	// Strict "slope < 0" is too aggressive given how noisy volume is, so
-	// we only reject when volume is *materially* rising (> 1% per candle,
-	// roughly +30% across a 30-candle window). Patterns with flat or
-	// declining volume pass.
 	if pEnd-patternStart >= 10 {
 		volPoints := make([]SwingPoint, 0, pEnd-patternStart+1)
 		volSum := 0.0
@@ -359,21 +312,8 @@ func detectAscendingTriangle(candles []Candle, rejectStats map[string]*int) Asce
 		}
 	}
 
-	// Target price — classical projection: pattern height (resistance
-	// minus the lowest support point, i.e. first valley) added on top of
-	// the resistance level. This is the price that a textbook breakout
-	// trade would aim for, derived purely from the geometry already
-	// validated above.
 	targetPrice := resistanceLevel + (resistanceLevel - valleys[0].Value)
 
-	// Breakout detection on the LAST candle. The geometric rules above
-	// have been tuned so that a breakout in the final candle does not
-	// invalidate the pattern (see comments on rule 13 and on
-	// findHorizontalResistance's grace period). If the last close is
-	// above resistance by the standard 0.5% tolerance, we report a
-	// breakout and compute the volume confirmation ratio against the
-	// prior 19 candles' average volume. Ratio >= 1.5 is the canonical
-	// confirmation threshold; the caller decides how to act on it.
 	n := len(candles)
 	breakoutDetected := candles[n-1].Close > resistanceLevel*1.005
 	breakoutVolumeRatio := 0.0
@@ -423,6 +363,115 @@ func findSwingHighs(candles []Candle, radius int) []SwingPoint {
 	return highs
 }
 
+func collectCalcATRDebug(candles []Candle) CalcATRDebugSnapshot {
+	n := len(candles)
+	out := CalcATRDebugSnapshot{BarCount: n, Bars: make([]CalcATRBarTrace, 0, n)}
+	if n == 0 {
+		return out
+	}
+
+	sum := candles[0].High - candles[0].Low
+	c0 := candles[0]
+	out.Bars = append(out.Bars, CalcATRBarTrace{
+		Index:    0,
+		FirstBar: true,
+		O:        c0.Open, H: c0.High, L: c0.Low, C: c0.Close,
+		HighLow: sum,
+		TR:      sum,
+		SumTR:   sum,
+	})
+
+	if n < 2 {
+		out.SumTR = sum
+		out.ATR = sum / float64(n)
+		return out
+	}
+
+	for i := 1; i < n; i++ {
+		c := candles[i]
+		prevC := candles[i-1].Close
+		hl := c.High - c.Low
+		d1 := math.Abs(c.High - prevC)
+		d2 := math.Abs(c.Low - prevC)
+
+		tr := hl
+		d1Took := d1 > tr
+		if d1Took {
+			tr = d1
+		}
+		d2Took := d2 > tr
+		if d2Took {
+			tr = d2
+		}
+
+		sum += tr
+		out.Bars = append(out.Bars, CalcATRBarTrace{
+			Index:    i,
+			FirstBar: false,
+			O:        c.Open, H: c.High, L: c.Low, C: c.Close,
+			PrevClose: prevC,
+			HighLow:   hl,
+			D1:        d1,
+			D2:        d2,
+			D1TookTR:  d1Took,
+			D2TookTR:  d2Took,
+			TR:        tr,
+			SumTR:     sum,
+		})
+	}
+
+	out.SumTR = sum
+	out.ATR = sum / float64(n)
+	return out
+}
+
+func formatCalcATRDebug(s CalcATRDebugSnapshot) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "calcATR step-by-step True Range trace\n")
+	fmt.Fprintf(&b, "n=%d candles\n\n", s.BarCount)
+
+	for _, row := range s.Bars {
+		if row.FirstBar {
+			fmt.Fprintf(&b, "i=0 (first bar: TR = High-Low only, no prevClose)\n")
+			fmt.Fprintf(&b, "  O=%s H=%s L=%s C=%s\n", atrFmt(row.O), atrFmt(row.H), atrFmt(row.L), atrFmt(row.C))
+			fmt.Fprintf(&b, "  tr = H-L = %s\n", atrFmt(row.HighLow))
+			fmt.Fprintf(&b, "  running sum after this bar = %s\n\n", atrFmt(row.SumTR))
+			continue
+		}
+
+		fmt.Fprintf(&b, "i=%d\n", row.Index)
+		fmt.Fprintf(&b, "  O=%s H=%s L=%s C=%s  prevClose=%s\n",
+			atrFmt(row.O), atrFmt(row.H), atrFmt(row.L), atrFmt(row.C), atrFmt(row.PrevClose))
+		fmt.Fprintf(&b, "  tr_initial (H-L) = %s\n", atrFmt(row.HighLow))
+		fmt.Fprintf(&b, "  d1 = |H - prevClose| = %s\n", atrFmt(row.D1))
+		fmt.Fprintf(&b, "  d2 = |L - prevClose| = %s\n", atrFmt(row.D2))
+
+		if row.D1TookTR {
+			fmt.Fprintf(&b, "  condition (d1 > tr): true -> tr := d1 = %s\n", atrFmt(row.D1))
+		} else {
+			fmt.Fprintf(&b, "  condition (d1 > tr): false (tr unchanged at %s)\n", atrFmt(row.HighLow))
+		}
+
+		trAfterD1 := row.HighLow
+		if row.D1TookTR {
+			trAfterD1 = row.D1
+		}
+		if row.D2TookTR {
+			fmt.Fprintf(&b, "  condition (d2 > tr): true -> tr := d2 = %s\n", atrFmt(row.D2))
+		} else {
+			fmt.Fprintf(&b, "  condition (d2 > tr): false (final tr = %s)\n", atrFmt(trAfterD1))
+		}
+
+		fmt.Fprintf(&b, "  final TR for bar i=%d: %s\n", row.Index, atrFmt(row.TR))
+		fmt.Fprintf(&b, "  running sum after this bar = %s\n\n", atrFmt(row.SumTR))
+	}
+
+	fmt.Fprintf(&b, "---\n")
+	fmt.Fprintf(&b, "sum(TR) = %s\n", atrFmt(s.SumTR))
+	fmt.Fprintf(&b, "ATR = sum / n = %s / %d = %s\n", atrFmt(s.SumTR), s.BarCount, atrFmt(s.ATR))
+	return b.String()
+}
+
 func atrFmt(x float64) string {
 	const scale = 1e8
 	r := math.Round(x*scale) / scale
@@ -438,71 +487,8 @@ func atrFmt(x float64) string {
 	return s
 }
 
-func calcATRDebug(candles []Candle) (float64, string) {
-	var b strings.Builder
-	fmt.Fprintf(&b, "calcATR step-by-step True Range trace\n")
-	fmt.Fprintf(&b, "n=%d candles\n\n", len(candles))
-
-	sum := candles[0].High - candles[0].Low
-	c0 := candles[0]
-	fmt.Fprintf(&b, "i=0 (first bar: TR = High-Low only, no prevClose)\n")
-	fmt.Fprintf(&b, "  O=%s H=%s L=%s C=%s\n", atrFmt(c0.Open), atrFmt(c0.High), atrFmt(c0.Low), atrFmt(c0.Close))
-	fmt.Fprintf(&b, "  tr = H-L = %s\n", atrFmt(sum))
-	fmt.Fprintf(&b, "  running sum after this bar = %s\n\n", atrFmt(sum))
-
-	if len(candles) < 2 {
-		atr := sum / float64(len(candles))
-		fmt.Fprintf(&b, "---\n")
-		fmt.Fprintf(&b, "sum(TR) = %s\n", atrFmt(sum))
-		fmt.Fprintf(&b, "ATR = sum / n = %s / %d = %s\n", atrFmt(sum), len(candles), atrFmt(atr))
-		return atr, b.String()
-	}
-
-	for i := 1; i < len(candles); i++ {
-		c := candles[i]
-		prevC := candles[i-1].Close
-		tr := c.High - c.Low
-		d1 := math.Abs(c.High - prevC)
-		d2 := math.Abs(c.Low - prevC)
-
-		fmt.Fprintf(&b, "i=%d\n", i)
-		fmt.Fprintf(&b, "  O=%s H=%s L=%s C=%s  prevClose=%s\n",
-			atrFmt(c.Open), atrFmt(c.High), atrFmt(c.Low), atrFmt(c.Close), atrFmt(prevC))
-		fmt.Fprintf(&b, "  tr_initial (H-L) = %s\n", atrFmt(tr))
-		fmt.Fprintf(&b, "  d1 = |H - prevClose| = %s\n", atrFmt(d1))
-		fmt.Fprintf(&b, "  d2 = |L - prevClose| = %s\n", atrFmt(d2))
-
-		cond1 := d1 > tr
-		if cond1 {
-			fmt.Fprintf(&b, "  condition (d1 > tr): true -> tr := d1 = %s\n", atrFmt(d1))
-			tr = d1
-		} else {
-			fmt.Fprintf(&b, "  condition (d1 > tr): false (tr unchanged at %s)\n", atrFmt(tr))
-		}
-
-		cond2 := d2 > tr
-		if cond2 {
-			fmt.Fprintf(&b, "  condition (d2 > tr): true -> tr := d2 = %s\n", atrFmt(d2))
-			tr = d2
-		} else {
-			fmt.Fprintf(&b, "  condition (d2 > tr): false (final tr = %s)\n", atrFmt(tr))
-		}
-
-		fmt.Fprintf(&b, "  final TR for bar i=%d: %s\n", i, atrFmt(tr))
-		sum += tr
-		fmt.Fprintf(&b, "  running sum after this bar = %s\n\n", atrFmt(sum))
-	}
-
-	atr := sum / float64(len(candles))
-	fmt.Fprintf(&b, "---\n")
-	fmt.Fprintf(&b, "sum(TR) = %s\n", atrFmt(sum))
-	fmt.Fprintf(&b, "ATR = sum / n = %s / %d = %s\n", atrFmt(sum), len(candles), atrFmt(atr))
-	return atr, b.String()
-}
-
 func calcATR(candles []Candle) float64 {
-	v, _ := calcATRDebug(candles)
-	return v
+	return collectCalcATRDebug(candles).ATR
 }
 
 func findValleysBetweenTouches(candles []Candle, touches []SwingPoint) []SwingPoint {
@@ -624,12 +610,6 @@ func findHorizontalResistance(candles []Candle, highs []SwingPoint, vol float64)
 		}
 	}
 
-	// After-touch close check — any close above resistance between the
-	// last touch and the end of the window invalidates the pattern,
-	// EXCEPT for the very last candle. We treat the final candle as a
-	// potential fresh breakout candle: allowing it to close above the
-	// resistance is what makes downstream breakout detection possible.
-	// Mid-period breakouts (anywhere except the last index) still reject.
 	lastIdx := bestTouchPoints[len(bestTouchPoints)-1].Index
 	for j := lastIdx; j < len(candles)-1; j++ {
 		if candles[j].Close > bestLevel*(1+breakout) {

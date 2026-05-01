@@ -28,7 +28,7 @@ type overlay struct {
 	toIdx     int
 	label     string
 	color     string
-	points    []SwingPoint // for kindScatter
+	points    []SwingPoint
 }
 
 type EChartsRenderer struct {
@@ -188,7 +188,6 @@ func (r *EChartsRenderer) buildKlineChart() *charts.Kline {
 func (r *EChartsRenderer) buildScatterOverlay(ov overlay) *charts.Scatter {
 	scatter := charts.NewScatter()
 
-	// Build sparse data: nil for every candle index, actual value at touch indices
 	data := make([]opts.ScatterData, len(r.candles))
 	for _, p := range ov.points {
 		if p.Index >= 0 && p.Index < len(r.candles) {
@@ -214,7 +213,6 @@ func (r *EChartsRenderer) buildScatterOverlay(ov overlay) *charts.Scatter {
 func (r *EChartsRenderer) buildLineOverlay(ov overlay) *charts.Line {
 	line := charts.NewLine()
 
-	// Создаём срез длиной с весь чарт, заполняем "-" (ECharts воспринимает как null/gap)
 	data := make([]opts.LineData, len(r.candles))
 	for i := range data {
 		data[i] = opts.LineData{Value: "-"}
