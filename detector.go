@@ -1,7 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"math"
+	"strconv"
+	"strings"
 )
 
 type SwingPoint struct {
@@ -13,6 +16,7 @@ type DebugInfo struct {
 	AvgPrice           float64
 	ATR                float64
 	Vol                float64
+	CalcATRLog         string
 	SwingHighsCount    int
 	ResistanceLevel    float64
 	ResistanceTouches  int
@@ -44,6 +48,7 @@ type DebugInfo struct {
 
 type AscendingTriangleResult struct {
 	Found                 bool
+	RejectReason          string
 	ResistanceLevel       float64
 	ResistanceTouches     int
 	ResistanceTouchPoints []SwingPoint
@@ -85,7 +90,7 @@ func reject(reason string, stats map[string]*int) AscendingTriangleResult {
 	}
 	*stats[reason]++
 
-	return AscendingTriangleResult{}
+	return AscendingTriangleResult{RejectReason: reason}
 }
 
 func detectAscendingTriangle(candles []Candle, rejectStats map[string]*int) AscendingTriangleResult {
@@ -97,11 +102,12 @@ func detectAscendingTriangle(candles []Candle, rejectStats map[string]*int) Asce
 	}
 	avgPrice /= float64(len(candles))
 
-	atr := calcATR(candles)
+	atr, atrLog := calcATRDebug(candles)
 	vol := atr / avgPrice
 	dbg.AvgPrice = avgPrice
 	dbg.ATR = atr
 	dbg.Vol = vol
+	dbg.CalcATRLog = atrLog
 
 	const swingRadius = 3
 	swingHighs := findSwingHighs(candles, swingRadius)
@@ -417,25 +423,86 @@ func findSwingHighs(candles []Candle, radius int) []SwingPoint {
 	return highs
 }
 
-func calcATR(candles []Candle) float64 {
+func atrFmt(x float64) string {
+	const scale = 1e8
+	r := math.Round(x*scale) / scale
+	if r == 0 || math.Abs(r) < 1e-12 {
+		return "0"
+	}
+	s := strconv.FormatFloat(r, 'f', 8, 64)
+	s = strings.TrimRight(s, "0")
+	s = strings.TrimRight(s, ".")
+	if s == "" || s == "-" {
+		return "0"
+	}
+	return s
+}
+
+func calcATRDebug(candles []Candle) (float64, string) {
+	var b strings.Builder
+	fmt.Fprintf(&b, "calcATR step-by-step True Range trace\n")
+	fmt.Fprintf(&b, "n=%d candles\n\n", len(candles))
+
 	sum := candles[0].High - candles[0].Low
+	c0 := candles[0]
+	fmt.Fprintf(&b, "i=0 (first bar: TR = High-Low only, no prevClose)\n")
+	fmt.Fprintf(&b, "  O=%s H=%s L=%s C=%s\n", atrFmt(c0.Open), atrFmt(c0.High), atrFmt(c0.Low), atrFmt(c0.Close))
+	fmt.Fprintf(&b, "  tr = H-L = %s\n", atrFmt(sum))
+	fmt.Fprintf(&b, "  running sum after this bar = %s\n\n", atrFmt(sum))
+
 	if len(candles) < 2 {
-		return sum
+		atr := sum / float64(len(candles))
+		fmt.Fprintf(&b, "---\n")
+		fmt.Fprintf(&b, "sum(TR) = %s\n", atrFmt(sum))
+		fmt.Fprintf(&b, "ATR = sum / n = %s / %d = %s\n", atrFmt(sum), len(candles), atrFmt(atr))
+		return atr, b.String()
 	}
 
 	for i := 1; i < len(candles); i++ {
-		tr := candles[i].High - candles[i].Low
-		d1 := math.Abs(candles[i].High - candles[i-1].Close)
-		d2 := math.Abs(candles[i].Low - candles[i-1].Close)
-		if d1 > tr {
+		c := candles[i]
+		prevC := candles[i-1].Close
+		tr := c.High - c.Low
+		d1 := math.Abs(c.High - prevC)
+		d2 := math.Abs(c.Low - prevC)
+
+		fmt.Fprintf(&b, "i=%d\n", i)
+		fmt.Fprintf(&b, "  O=%s H=%s L=%s C=%s  prevClose=%s\n",
+			atrFmt(c.Open), atrFmt(c.High), atrFmt(c.Low), atrFmt(c.Close), atrFmt(prevC))
+		fmt.Fprintf(&b, "  tr_initial (H-L) = %s\n", atrFmt(tr))
+		fmt.Fprintf(&b, "  d1 = |H - prevClose| = %s\n", atrFmt(d1))
+		fmt.Fprintf(&b, "  d2 = |L - prevClose| = %s\n", atrFmt(d2))
+
+		cond1 := d1 > tr
+		if cond1 {
+			fmt.Fprintf(&b, "  condition (d1 > tr): true -> tr := d1 = %s\n", atrFmt(d1))
 			tr = d1
+		} else {
+			fmt.Fprintf(&b, "  condition (d1 > tr): false (tr unchanged at %s)\n", atrFmt(tr))
 		}
-		if d2 > tr {
+
+		cond2 := d2 > tr
+		if cond2 {
+			fmt.Fprintf(&b, "  condition (d2 > tr): true -> tr := d2 = %s\n", atrFmt(d2))
 			tr = d2
+		} else {
+			fmt.Fprintf(&b, "  condition (d2 > tr): false (final tr = %s)\n", atrFmt(tr))
 		}
+
+		fmt.Fprintf(&b, "  final TR for bar i=%d: %s\n", i, atrFmt(tr))
 		sum += tr
+		fmt.Fprintf(&b, "  running sum after this bar = %s\n\n", atrFmt(sum))
 	}
-	return sum / float64(len(candles))
+
+	atr := sum / float64(len(candles))
+	fmt.Fprintf(&b, "---\n")
+	fmt.Fprintf(&b, "sum(TR) = %s\n", atrFmt(sum))
+	fmt.Fprintf(&b, "ATR = sum / n = %s / %d = %s\n", atrFmt(sum), len(candles), atrFmt(atr))
+	return atr, b.String()
+}
+
+func calcATR(candles []Candle) float64 {
+	v, _ := calcATRDebug(candles)
+	return v
 }
 
 func findValleysBetweenTouches(candles []Candle, touches []SwingPoint) []SwingPoint {

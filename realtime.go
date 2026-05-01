@@ -177,7 +177,14 @@ func takeRealtimeScreenshot(r scanResult, cfg RealtimeConfig, ss *Screenshotter)
 		log.Printf("[realtime] [%s] failed to create dir: %v", r.symbol, err)
 		return
 	}
-	pngFile := filepath.Join(pairDir, fmt.Sprintf("%s_%s.png", r.symbol, ts))
+	stem := fmt.Sprintf("%s_%s", r.symbol, ts)
+	groupDir := filepath.Join(pairDir, stem)
+	if err := os.MkdirAll(groupDir, 0o755); err != nil {
+		log.Printf("[realtime] [%s] failed to create group dir: %v", r.symbol, err)
+		return
+	}
+	pngFile := filepath.Join(groupDir, fmt.Sprintf("1_%s_1.png", stem))
+	calcATRTxt := filepath.Join(groupDir, fmt.Sprintf("3_%s_calcATR_3.txt", stem))
 
 	renderer := NewEChartsRenderer()
 	if err := RenderTriangleDetection(r.candles, r.result, renderer, htmlTmp); err != nil {
@@ -189,6 +196,7 @@ func takeRealtimeScreenshot(r scanResult, cfg RealtimeConfig, ss *Screenshotter)
 		log.Printf("[realtime] [%s] screenshot error: %v", r.symbol, err)
 	}
 	_ = os.Remove(htmlTmp)
+	writeCalcATRDebugTxt(calcATRTxt, r.result.Debug.CalcATRLog)
 	fmt.Printf("[realtime] [%s] screenshot saved: %s\n", r.symbol, pngFile)
 }
 
