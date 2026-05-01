@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/go-echarts/go-echarts/v2/charts"
 	"github.com/go-echarts/go-echarts/v2/components"
@@ -36,6 +37,9 @@ type EChartsRenderer struct {
 	timestamps []string
 	overlays   []overlay
 	stats      []string
+
+	captionSymbol string
+	captionAt     time.Time
 }
 
 func NewEChartsRenderer() *EChartsRenderer {
@@ -44,6 +48,11 @@ func NewEChartsRenderer() *EChartsRenderer {
 
 func (r *EChartsRenderer) AddStat(key, value string) {
 	r.stats = append(r.stats, key+": "+value)
+}
+
+func (r *EChartsRenderer) SetCaption(symbol string, capturedAt time.Time) {
+	r.captionSymbol = symbol
+	r.captionAt = capturedAt
 }
 
 func (r *EChartsRenderer) RenderCandles(candles []Candle) {
@@ -121,22 +130,33 @@ func (r *EChartsRenderer) Export(filename string) error {
 	return os.WriteFile(filename, []byte(html), 0o644)
 }
 
+func formatCaptionUTCAndMSK(t time.Time) string {
+	utc := t.UTC().Format("2006-01-02 15:04:05")
+	mskLoc, err := time.LoadLocation("Europe/Moscow")
+	if err != nil {
+		mskLoc = time.FixedZone("MSK", 3*3600)
+	}
+	msk := t.In(mskLoc).Format("2006-01-02 15:04:05")
+	return "UTC " + utc + "  |  MSK  " + msk
+}
+
 func (r *EChartsRenderer) buildSubtitle() string {
-	base := fmt.Sprintf("Analysis of %d candles", len(r.candles))
-	if len(r.stats) == 0 {
-		return base
+	parts := make([]string, 0, 2+len(r.stats))
+	if !r.captionAt.IsZero() {
+		parts = append(parts, formatCaptionUTCAndMSK(r.captionAt))
 	}
-	parts := []string{base}
+	parts = append(parts, fmt.Sprintf("Analysis of %d candles", len(r.candles)))
 	parts = append(parts, r.stats...)
-	result := parts[0]
-	for _, p := range parts[1:] {
-		result += "  |  " + p
-	}
-	return result
+	return strings.Join(parts, "  |  ")
 }
 
 func (r *EChartsRenderer) buildKlineChart() *charts.Kline {
 	kline := charts.NewKLine()
+
+	title := "Horizontal Resistance Detector"
+	if r.captionSymbol != "" {
+		title = r.captionSymbol
+	}
 
 	kline.SetGlobalOptions(
 		charts.WithInitializationOpts(opts.Initialization{
@@ -144,7 +164,7 @@ func (r *EChartsRenderer) buildKlineChart() *charts.Kline {
 			Height: "700px",
 		}),
 		charts.WithTitleOpts(opts.Title{
-			Title:    "Horizontal Resistance Detector",
+			Title:    title,
 			Subtitle: r.buildSubtitle(),
 		}),
 		charts.WithTooltipOpts(opts.Tooltip{

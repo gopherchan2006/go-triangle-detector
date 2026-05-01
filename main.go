@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 func sanitizeReason(reason string) string {
@@ -207,6 +208,7 @@ func analyzeSymbol(symbol, interval, startDate, endDate string, dataDir string, 
 			calcATRTxt := filepath.Join(groupDir, fmt.Sprintf("3_%s_calcATR_3.txt", stem))
 
 			renderer := NewEChartsRenderer()
+			renderer.SetCaption(symbol, time.Now().UTC())
 			if err := RenderTriangleDetection(window, result, renderer, htmlTmp); err != nil {
 				log.Printf("[%s] error rendering chart for %s: %v", symbol, fileDate, err)
 				_ = os.Remove(htmlTmp)
@@ -252,6 +254,7 @@ func analyzeSymbol(symbol, interval, startDate, endDate string, dataDir string, 
 			}
 
 			renderer := NewEChartsRenderer()
+			renderer.SetCaption(symbol, time.Now().UTC())
 			if err := RenderTriangleDetection(window, result, renderer, htmlTmp); err != nil {
 				_ = os.Remove(htmlTmp)
 				continue

@@ -187,6 +187,7 @@ func takeRealtimeScreenshot(r scanResult, cfg RealtimeConfig, ss *Screenshotter)
 	calcATRTxt := filepath.Join(groupDir, fmt.Sprintf("3_%s_calcATR_3.txt", stem))
 
 	renderer := NewEChartsRenderer()
+	renderer.SetCaption(r.symbol, time.Now().UTC())
 	if err := RenderTriangleDetection(r.candles, r.result, renderer, htmlTmp); err != nil {
 		log.Printf("[realtime] [%s] render error: %v", r.symbol, err)
 		_ = os.Remove(htmlTmp)
