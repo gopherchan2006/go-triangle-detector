@@ -82,6 +82,10 @@ func main() {
 	rejectLimit := flag.Int("reject-limit", 0, "Max reject charts to save per filter (0 = disabled)")
 	flag.Parse()
 
+	if err := os.RemoveAll("tmp"); err != nil {
+		log.Printf("remove tmp: %v", err)
+	}
+
 	_ = loadEnvFile(".env")
 
 	if *interval == "" {
