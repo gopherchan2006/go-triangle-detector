@@ -171,38 +171,30 @@ func scanAllSymbols(symbols []string, cfg RealtimeConfig) []scanResult {
 
 func takeRealtimeScreenshot(r scanResult, cfg RealtimeConfig, ss *Screenshotter) {
 	ts := time.Now().UTC().Format("20060102_1504")
-	htmlTmp := filepath.Join(os.TempDir(), fmt.Sprintf("rt_%s_%s.tmp.html", r.symbol, ts))
 	pairDir := filepath.Join(cfg.OutputDir, r.symbol)
 	if err := os.MkdirAll(pairDir, 0o755); err != nil {
 		log.Printf("[realtime] [%s] failed to create dir: %v", r.symbol, err)
 		return
 	}
 	stem := fmt.Sprintf("%s_%s", r.symbol, ts)
-	groupDir := filepath.Join(pairDir, stem)
-	if err := os.MkdirAll(groupDir, 0o755); err != nil {
+	artNames := NewArtifactNames(pairDir, stem)
+	if err := os.MkdirAll(artNames.GroupDir, 0o755); err != nil {
 		log.Printf("[realtime] [%s] failed to create group dir: %v", r.symbol, err)
 		return
 	}
-	pngFile := filepath.Join(groupDir, fmt.Sprintf("1_%s_1.png", stem))
-	calcATRTxt := filepath.Join(groupDir, fmt.Sprintf("3_%s_calcATR_3.txt", stem))
-	swingTxt := filepath.Join(groupDir, fmt.Sprintf("4_%s_findSwingHighs_4.txt", stem))
-	horizTxt := filepath.Join(groupDir, fmt.Sprintf("5_%s_findHorizontalResistance_5.txt", stem))
-
 	renderer := NewEChartsRenderer()
 	renderer.SetCaption(r.symbol, time.Now().UTC())
-	if err := RenderTriangleDetection(r.candles, r.result, renderer, htmlTmp); err != nil {
+	if err := RenderTriangleDetection(r.candles, r.result, renderer, artNames.HTMLTmp); err != nil {
 		log.Printf("[realtime] [%s] render error: %v", r.symbol, err)
-		_ = os.Remove(htmlTmp)
+		_ = os.Remove(artNames.HTMLTmp)
 		return
 	}
-	if err := ss.Screenshot(htmlTmp, pngFile); err != nil {
+	if err := ss.Screenshot(artNames.HTMLTmp, artNames.PNG); err != nil {
 		log.Printf("[realtime] [%s] screenshot error: %v", r.symbol, err)
 	}
-	_ = os.Remove(htmlTmp)
-	writeCalcATRDebugTxt(calcATRTxt, r.result.Debug.CalcATRLog)
-	writeFindSwingHighsDebugTxt(swingTxt, r.result.Debug.FindSwingHighsLog)
-	writeFindHorizontalResistanceDebugTxt(horizTxt, r.result.Debug.FindHorizontalResistanceLog)
-	fmt.Printf("[realtime] [%s] screenshot saved: %s\n", r.symbol, pngFile)
+	_ = os.Remove(artNames.HTMLTmp)
+	writeArtifactTexts(artNames, r.result)
+	fmt.Printf("[realtime] [%s] screenshot saved: %s\n", r.symbol, artNames.PNG)
 }
 
 func nextCandleClose(now time.Time, interval time.Duration) time.Time {

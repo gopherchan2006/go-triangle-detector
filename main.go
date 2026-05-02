@@ -62,32 +62,6 @@ func writeDebugTxt(txtPath string, result AscendingTriangleResult) {
 	}
 }
 
-func writeCalcATRDebugTxt(txtPath string, logContent string) {
-	if strings.TrimSpace(logContent) == "" {
-		return
-	}
-	if err := os.WriteFile(txtPath, []byte(logContent), 0o644); err != nil {
-		log.Printf("writeCalcATRDebugTxt: %v", err)
-	}
-}
-
-func writeFindSwingHighsDebugTxt(txtPath string, logContent string) {
-	if strings.TrimSpace(logContent) == "" {
-		return
-	}
-	if err := os.WriteFile(txtPath, []byte(logContent), 0o644); err != nil {
-		log.Printf("writeFindSwingHighsDebugTxt: %v", err)
-	}
-}
-
-func writeFindHorizontalResistanceDebugTxt(txtPath string, logContent string) {
-	if strings.TrimSpace(logContent) == "" {
-		return
-	}
-	if err := os.WriteFile(txtPath, []byte(logContent), 0o644); err != nil {
-		log.Printf("writeFindHorizontalResistanceDebugTxt: %v", err)
-	}
-}
 
 func main() {
 	symbol := flag.String("symbol", "", "Trading pair symbol, e.g. BTCUSDT")
@@ -219,33 +193,24 @@ func analyzeSymbol(symbol, interval, startDate, endDate string, dataDir string, 
 			labelDate := timestamp.Format("2006-01-02 15:04:05")
 
 			stem := fmt.Sprintf("%s_%s", symbol, fileDate)
-			groupDir := filepath.Join(chartDir, stem)
-			if err := os.MkdirAll(groupDir, 0o755); err != nil {
-				log.Printf("[%s] failed to create group dir %s: %v", symbol, groupDir, err)
+			artNames := NewArtifactNames(chartDir, stem)
+
+			if err := os.MkdirAll(artNames.GroupDir, 0o755); err != nil {
+				log.Printf("[%s] failed to create group dir %s: %v", symbol, artNames.GroupDir, err)
 				continue
 			}
-			htmlTmp := filepath.Join(chartDir, stem+"_render.tmp.html")
-			pngFile := filepath.Join(groupDir, fmt.Sprintf("1_%s_1.png", stem))
-			debugTxt := filepath.Join(groupDir, fmt.Sprintf("2_%s_2.txt", stem))
-			calcATRTxt := filepath.Join(groupDir, fmt.Sprintf("3_%s_calcATR_3.txt", stem))
-			swingTxt := filepath.Join(groupDir, fmt.Sprintf("4_%s_findSwingHighs_4.txt", stem))
-			horizTxt := filepath.Join(groupDir, fmt.Sprintf("5_%s_findHorizontalResistance_5.txt", stem))
-
 			renderer := NewEChartsRenderer()
 			renderer.SetCaption(symbol, time.Now().UTC())
-			if err := RenderTriangleDetection(window, result, renderer, htmlTmp); err != nil {
+			if err := RenderTriangleDetection(window, result, renderer, artNames.HTMLTmp); err != nil {
 				log.Printf("[%s] error rendering chart for %s: %v", symbol, fileDate, err)
-				_ = os.Remove(htmlTmp)
+				_ = os.Remove(artNames.HTMLTmp)
 				continue
 			}
-			if err := ss.Screenshot(htmlTmp, pngFile); err != nil {
+			if err := ss.Screenshot(artNames.HTMLTmp, artNames.PNG); err != nil {
 				log.Printf("[%s] error taking screenshot for %s: %v", symbol, fileDate, err)
 			}
-			writeDebugTxt(debugTxt, result)
-			writeCalcATRDebugTxt(calcATRTxt, result.Debug.CalcATRLog)
-			writeFindSwingHighsDebugTxt(swingTxt, result.Debug.FindSwingHighsLog)
-			writeFindHorizontalResistanceDebugTxt(horizTxt, result.Debug.FindHorizontalResistanceLog)
-			_ = os.Remove(htmlTmp)
+			writeArtifactTexts(artNames, result)
+			_ = os.Remove(artNames.HTMLTmp)
 
 			fmt.Printf("[%s] [Pattern #%d] %s | Resistance: %.2f | Support slope: %.4f\n",
 				symbol, patterns, labelDate, result.ResistanceLevel, result.SupportSlope)
