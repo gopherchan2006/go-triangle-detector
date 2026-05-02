@@ -6,41 +6,66 @@ type SwingPoint struct {
 	Value float64
 }
 
-// DebugInfo contains diagnostic values collected during a single detection run.
-type DebugInfo struct {
-	AvgPrice                    float64
-	ATR                         float64
-	Vol                         float64
-	CalcATRLog                  string
-	FindSwingHighsLog           string
-	FindHorizontalResistanceLog string
-	SwingHighsCount             int
+// ATRDebug holds ATR calculation diagnostics.
+type ATRDebug struct {
+	AvgPrice  float64
+	ATRValue  float64
+	Vol       float64
+	CalcATRLog string
+}
+
+// SwingDebug holds swing high detection diagnostics.
+type SwingDebug struct {
+	SwingHighsCount   int
+	FindSwingHighsLog string
+}
+
+// ResistanceDebug holds horizontal resistance diagnostics.
+type ResistanceDebug struct {
 	ResistanceLevel             float64
 	ResistanceTouches           int
 	FirstTouchIdx               int
 	HighAboveThreshold          float64
 	CrashThreshold              float64
-	ValleysCount                int
-	FirstVIdx                   int
-	MaxCrashRange               float64
-	AllowedFlat                 float64
-	SupportSlope                float64
-	SupportIntercept            float64
-	MaxValleyDepth              float64
-	ValleyDeviation             float64
-	PatternStart                int
-	PatternEnd                  int
-	XIntersect                  float64
-	LastX                       float64
-	CeilingTol                  float64
-	Ceiling                     float64
-	FloorTol                    float64
-	HeightAtStart               float64
-	HeightAtEnd                 float64
-	LastResistanceIdx           int
-	LastValleyIdx               int
-	PEnd                        int
-	PatternWidth                float64
+	FindHorizontalResistanceLog string
+}
+
+// SupportDebug holds valley/support line diagnostics.
+type SupportDebug struct {
+	ValleysCount     int
+	FirstVIdx        int
+	MaxCrashRange    float64
+	AllowedFlat      float64
+	SupportSlope     float64
+	SupportIntercept float64
+	MaxValleyDepth   float64
+	ValleyDeviation  float64
+}
+
+// GeometryDebug holds triangle geometry diagnostics.
+type GeometryDebug struct {
+	PatternStart      int
+	PatternEnd        int
+	XIntersect        float64
+	LastX             float64
+	CeilingTol        float64
+	Ceiling           float64
+	FloorTol          float64
+	HeightAtStart     float64
+	HeightAtEnd       float64
+	LastResistanceIdx int
+	LastValleyIdx     int
+	PEnd              int
+	PatternWidth      float64
+}
+
+// DebugInfo contains diagnostic values collected during a single detection run.
+type DebugInfo struct {
+	ATR        ATRDebug
+	Swing      SwingDebug
+	Resistance ResistanceDebug
+	Support    SupportDebug
+	Geometry   GeometryDebug
 }
 
 // AscendingTriangleResult is the output of DetectAscendingTriangle.

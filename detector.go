@@ -73,11 +73,11 @@ func stepCalcATR(ctx *pipeCtx) {
 
 	atrSnap := collectCalcATRDebug(ctx.candles)
 	ctx.vol = atrSnap.ATR / ctx.avgPrice
-	ctx.dbg.AvgPrice = ctx.avgPrice
-	ctx.dbg.ATR = atrSnap.ATR
-	ctx.dbg.Vol = ctx.vol
+	ctx.dbg.ATR.AvgPrice = ctx.avgPrice
+	ctx.dbg.ATR.ATRValue = atrSnap.ATR
+	ctx.dbg.ATR.Vol = ctx.vol
 	if ctx.opts.trace {
-		ctx.dbg.CalcATRLog = formatCalcATRDebug(atrSnap)
+		ctx.dbg.ATR.CalcATRLog = formatCalcATRDebug(atrSnap)
 	}
 }
 
@@ -85,9 +85,9 @@ func stepFindSwingHighs(ctx *pipeCtx) {
 	snap := collectFindSwingHighsDebug(ctx.candles, ctx.p.SwingRadius)
 	ctx.swingHighs = snap.SwingHighs
 	if ctx.opts.trace {
-		ctx.dbg.FindSwingHighsLog = formatFindSwingHighsDebug(snap)
+		ctx.dbg.Swing.FindSwingHighsLog = formatFindSwingHighsDebug(snap)
 	}
-	ctx.dbg.SwingHighsCount = len(ctx.swingHighs)
+	ctx.dbg.Swing.SwingHighsCount = len(ctx.swingHighs)
 	if len(ctx.swingHighs) < 2 {
 		rejectCtx(ctx, ReasonFewSwingHighs)
 	}
@@ -96,13 +96,13 @@ func stepFindSwingHighs(ctx *pipeCtx) {
 func stepFindResistance(ctx *pipeCtx) {
 	snap := collectFindHorizontalResistanceDebug(ctx.candles, ctx.swingHighs, ctx.vol, ctx.p)
 	if ctx.opts.trace {
-		ctx.dbg.FindHorizontalResistanceLog = formatFindHorizontalResistanceDebug(snap)
+		ctx.dbg.Resistance.FindHorizontalResistanceLog = formatFindHorizontalResistanceDebug(snap)
 	}
 	ctx.resistanceLevel = snap.Level
 	ctx.resistanceTouches = snap.Touches
 	ctx.resistanceTouchPoints = snap.TouchPoints
-	ctx.dbg.ResistanceLevel = snap.Level
-	ctx.dbg.ResistanceTouches = snap.Touches
+	ctx.dbg.Resistance.ResistanceLevel = snap.Level
+	ctx.dbg.Resistance.ResistanceTouches = snap.Touches
 	if snap.Touches < 3 {
 		rejectCtx(ctx, ReasonResistanceLt3Touches)
 	}
@@ -113,9 +113,9 @@ func stepCheckTimingAndHighs(ctx *pipeCtx) {
 	firstTouchIdx := ctx.resistanceTouchPoints[0].Index
 	highAboveThreshold := ctx.resistanceLevel * (1 + ctx.vol*p.HighAboveVolMult)
 	crashThreshold := ctx.resistanceLevel * (1 - math.Max(p.CrashVolMin, ctx.vol*8))
-	ctx.dbg.FirstTouchIdx = firstTouchIdx
-	ctx.dbg.HighAboveThreshold = highAboveThreshold
-	ctx.dbg.CrashThreshold = crashThreshold
+	ctx.dbg.Resistance.FirstTouchIdx = firstTouchIdx
+	ctx.dbg.Resistance.HighAboveThreshold = highAboveThreshold
+	ctx.dbg.Resistance.CrashThreshold = crashThreshold
 
 	for i := 0; i < firstTouchIdx; i++ {
 		if ctx.candles[i].High > highAboveThreshold {
@@ -147,7 +147,7 @@ func stepCheckTimingAndHighs(ctx *pipeCtx) {
 
 func stepFindValleys(ctx *pipeCtx) {
 	ctx.valleys = findValleysBetweenTouches(ctx.candles, ctx.resistanceTouchPoints)
-	ctx.dbg.ValleysCount = len(ctx.valleys)
+	ctx.dbg.Support.ValleysCount = len(ctx.valleys)
 	if len(ctx.valleys) < 2 {
 		rejectCtx(ctx, ReasonFewValleys)
 	}
@@ -168,15 +168,15 @@ func stepValidateValleys(ctx *pipeCtx) {
 			}
 		}
 	}
-	ctx.dbg.FirstVIdx = firstVIdx
-	ctx.dbg.MaxCrashRange = maxCrashRange
+	ctx.dbg.Support.FirstVIdx = firstVIdx
+	ctx.dbg.Support.MaxCrashRange = maxCrashRange
 	if maxCrashRange > math.Max(p.MaxFirstValleyCrash, ctx.vol*4) {
 		rejectCtx(ctx, ReasonFirstValleyCrash)
 		return
 	}
 
 	allowedFlat := ctx.vol * p.AllowedFlatVolMult
-	ctx.dbg.AllowedFlat = allowedFlat
+	ctx.dbg.Support.AllowedFlat = allowedFlat
 	for i := 1; i < len(valleys); i++ {
 		if valleys[i].Value < valleys[i-1].Value*(1-allowedFlat) {
 			rejectCtx(ctx, ReasonValleyNotRising)
@@ -193,7 +193,7 @@ func stepValidateValleys(ctx *pipeCtx) {
 	}
 
 	maxValleyDepth := math.Max(p.MaxValleyDepthMin, ctx.vol*5)
-	ctx.dbg.MaxValleyDepth = maxValleyDepth
+	ctx.dbg.Support.MaxValleyDepth = maxValleyDepth
 	for _, v := range valleys {
 		if v.Value < ctx.resistanceLevel*(1-maxValleyDepth) {
 			rejectCtx(ctx, ReasonValleyTooDeep)
@@ -209,8 +209,8 @@ func stepFitSupportLine(ctx *pipeCtx) {
 	slope, intercept := linearRegression(valleys)
 	ctx.supportSlope = slope
 	ctx.supportIntercept = intercept
-	ctx.dbg.SupportSlope = slope
-	ctx.dbg.SupportIntercept = intercept
+	ctx.dbg.Support.SupportSlope = slope
+	ctx.dbg.Support.SupportIntercept = intercept
 
 	if slope <= 0 {
 		rejectCtx(ctx, ReasonNegativeSlope)
@@ -225,7 +225,7 @@ func stepFitSupportLine(ctx *pipeCtx) {
 	}
 
 	valleyDeviation := math.Max(p.ValleyDeviationMin, ctx.vol*1.0)
-	ctx.dbg.ValleyDeviation = valleyDeviation
+	ctx.dbg.Support.ValleyDeviation = valleyDeviation
 	for _, v := range valleys {
 		expected := slope*float64(v.Index) + intercept
 		if expected > 0 && math.Abs(v.Value-expected)/expected > valleyDeviation {
@@ -247,15 +247,15 @@ func stepCheckGeometry(ctx *pipeCtx) {
 	patternEnd := len(candles) - 1
 	ctx.patternStart = patternStart
 	ctx.patternEnd = patternEnd
-	ctx.dbg.PatternStart = patternStart
-	ctx.dbg.PatternEnd = patternEnd
+	ctx.dbg.Geometry.PatternStart = patternStart
+	ctx.dbg.Geometry.PatternEnd = patternEnd
 
 	xIntersect := (ctx.resistanceLevel - ctx.supportIntercept) / ctx.supportSlope
 	lastX := float64(len(candles) - 1)
 	ctx.xIntersect = xIntersect
 	ctx.lastX = lastX
-	ctx.dbg.XIntersect = xIntersect
-	ctx.dbg.LastX = lastX
+	ctx.dbg.Geometry.XIntersect = xIntersect
+	ctx.dbg.Geometry.LastX = lastX
 	if xIntersect <= lastX {
 		rejectCtx(ctx, ReasonNoConvergence)
 		return
@@ -263,8 +263,8 @@ func stepCheckGeometry(ctx *pipeCtx) {
 
 	ceilingTol := math.Max(p.CeilingTolMin, ctx.vol*0.7)
 	ceiling := ctx.resistanceLevel * (1 + ceilingTol)
-	ctx.dbg.CeilingTol = ceilingTol
-	ctx.dbg.Ceiling = ceiling
+	ctx.dbg.Geometry.CeilingTol = ceilingTol
+	ctx.dbg.Geometry.Ceiling = ceiling
 	ceilingEnd := patternEnd
 	if ceilingEnd == len(candles)-1 {
 		ceilingEnd = patternEnd - 1
@@ -277,7 +277,7 @@ func stepCheckGeometry(ctx *pipeCtx) {
 	}
 
 	floorTol := math.Max(p.FloorTolMin, ctx.vol*0.5)
-	ctx.dbg.FloorTol = floorTol
+	ctx.dbg.Geometry.FloorTol = floorTol
 	for i := patternStart; i <= patternEnd; i++ {
 		supportVal := ctx.supportSlope*float64(i) + ctx.supportIntercept
 		if candles[i].Low < supportVal*(1-floorTol) {
@@ -295,8 +295,8 @@ func stepCheckGeometry(ctx *pipeCtx) {
 
 	heightAtStart := ctx.resistanceLevel - (ctx.supportSlope*float64(patternStart) + ctx.supportIntercept)
 	heightAtEnd := ctx.resistanceLevel - (ctx.supportSlope*float64(patternEnd) + ctx.supportIntercept)
-	ctx.dbg.HeightAtStart = heightAtStart
-	ctx.dbg.HeightAtEnd = heightAtEnd
+	ctx.dbg.Geometry.HeightAtStart = heightAtStart
+	ctx.dbg.Geometry.HeightAtEnd = heightAtEnd
 	if heightAtEnd <= 0 || heightAtEnd >= heightAtStart*p.MaxNarrowingRatio {
 		rejectCtx(ctx, ReasonNotNarrowing)
 		return
@@ -313,16 +313,16 @@ func stepCheckGeometry(ctx *pipeCtx) {
 	if lastValleyIdx > pEnd {
 		pEnd = lastValleyIdx
 	}
-	ctx.dbg.LastResistanceIdx = lastResistanceIdx
-	ctx.dbg.LastValleyIdx = lastValleyIdx
-	ctx.dbg.PEnd = pEnd
+	ctx.dbg.Geometry.LastResistanceIdx = lastResistanceIdx
+	ctx.dbg.Geometry.LastValleyIdx = lastValleyIdx
+	ctx.dbg.Geometry.PEnd = pEnd
 	if pEnd-patternStart < p.MinPatternWidth {
 		rejectCtx(ctx, ReasonTooNarrow)
 		return
 	}
 
 	patternWidth := float64(pEnd - patternStart)
-	ctx.dbg.PatternWidth = patternWidth
+	ctx.dbg.Geometry.PatternWidth = patternWidth
 	if xIntersect > lastX+patternWidth*p.MaxApexFactor {
 		rejectCtx(ctx, ReasonApexTooFar)
 	}
@@ -331,7 +331,7 @@ func stepCheckGeometry(ctx *pipeCtx) {
 func stepCheckVolume(ctx *pipeCtx) {
 	p := ctx.p
 	patternStart := ctx.patternStart
-	pEnd := ctx.dbg.PEnd
+	pEnd := ctx.dbg.Geometry.PEnd
 	if pEnd-patternStart < p.VolDeclMinWidth {
 		return
 	}

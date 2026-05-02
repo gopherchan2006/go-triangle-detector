@@ -36,9 +36,9 @@ func NewArtifactNames(baseDir, stem string) ArtifactNames {
 // writeArtifactTexts writes all debug text files for a detected pattern result.
 func writeArtifactTexts(names ArtifactNames, result AscendingTriangleResult) {
 	writeDebugTxt(names.DebugTxt, result)
-	writeLogTxt(names.CalcATRTxt, result.Debug.CalcATRLog)
-	writeLogTxt(names.SwingTxt, result.Debug.FindSwingHighsLog)
-	writeLogTxt(names.HorizTxt, result.Debug.FindHorizontalResistanceLog)
+	writeLogTxt(names.CalcATRTxt, result.Debug.ATR.CalcATRLog)
+	writeLogTxt(names.SwingTxt, result.Debug.Swing.FindSwingHighsLog)
+	writeLogTxt(names.HorizTxt, result.Debug.Resistance.FindHorizontalResistanceLog)
 }
 
 func writeLogTxt(path, content string) {
