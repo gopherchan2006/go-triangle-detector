@@ -1,7 +1,5 @@
 package detect
 
-// Params holds all tunable thresholds for the ascending triangle detector.
-// Default values match the original hard-coded constants exactly.
 type Params struct {
 	SwingRadius          int
 	VolTolerance         float64
@@ -28,7 +26,6 @@ type Params struct {
 	VolAvgWindow         int
 }
 
-// DefaultParams returns the original hard-coded thresholds.
 func DefaultParams() Params {
 	return Params{
 		SwingRadius:          3,

@@ -6,7 +6,6 @@ import (
 	"triangle-detector/internal/domain"
 )
 
-// pipeCtx carries mutable state threaded through all pipeline steps.
 type pipeCtx struct {
 	candles []domain.Candle
 	o       opts
@@ -30,17 +29,14 @@ type pipeCtx struct {
 	rejected *Result
 }
 
-// pipeStep processes one stage of the detection pipeline.
 type pipeStep func(ctx *pipeCtx)
 
-// rejectCtx records a rejection and stops further pipeline steps.
 func rejectCtx(ctx *pipeCtx, reason RejectReason) {
 	ctx.o.counter.Inc(reason)
 	res := Result{RejectReason: reason}
 	ctx.rejected = &res
 }
 
-// DetectAscendingTriangle is the public entry point.
 func DetectAscendingTriangle(candles []domain.Candle, options ...Option) Result {
 	o := newOpts(options)
 	return detectAscendingTriangle(candles, o)

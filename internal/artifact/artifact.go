@@ -10,7 +10,6 @@ import (
 	"triangle-detector/internal/detect"
 )
 
-// Names holds all output file paths for one detected pattern.
 type Names struct {
 	GroupDir   string
 	HTMLTmp    string
@@ -21,7 +20,6 @@ type Names struct {
 	HorizTxt   string
 }
 
-// NewNames builds the full set of artifact paths given a base directory and a stem string.
 func NewNames(baseDir, stem string) Names {
 	groupDir := filepath.Join(baseDir, stem)
 	return Names{
@@ -35,7 +33,6 @@ func NewNames(baseDir, stem string) Names {
 	}
 }
 
-// WriteTexts writes all debug text files for a detected pattern result.
 func WriteTexts(names Names, result detect.Result, writeFn func(path string, result detect.Result)) {
 	writeFn(names.DebugTxt, result)
 	writeLogTxt(names.CalcATRTxt, result.Debug.ATR.CalcATRLog)
@@ -43,7 +40,6 @@ func WriteTexts(names Names, result detect.Result, writeFn func(path string, res
 	writeLogTxt(names.HorizTxt, result.Debug.Resistance.FindHorizontalResistanceLog)
 }
 
-// WriteLogTxt writes a single log file if content is non-empty.
 func WriteLogTxt(path, content string) {
 	writeLogTxt(path, content)
 }

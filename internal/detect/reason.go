@@ -1,7 +1,5 @@
 package detect
 
-// RejectReason is a typed string for detector rejection codes.
-// Values are frozen — they match directory names under tmp/rejects/.
 type RejectReason string
 
 const (

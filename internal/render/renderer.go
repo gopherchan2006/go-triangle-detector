@@ -7,7 +7,6 @@ import (
 	"triangle-detector/internal/domain"
 )
 
-// ChartRenderer is the port for chart rendering backends.
 type ChartRenderer interface {
 	RenderCandles(candles []domain.Candle)
 	DrawHorizontalLine(level float64, fromIndex, toIndex int, label string)

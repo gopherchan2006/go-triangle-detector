@@ -8,7 +8,6 @@ import (
 	"triangle-detector/internal/render"
 )
 
-// RenderTriangleDetection renders candles and optional pattern overlays to the given renderer.
 func RenderTriangleDetection(
 	candles []domain.Candle,
 	result detect.Result,

@@ -7,7 +7,6 @@ import (
 	"triangle-detector/internal/domain"
 )
 
-// makeCandle creates a simple candle where open=close=price, wick extends by spread.
 func makeCandle(close float64) domain.Candle {
 	return domain.Candle{
 		Open:   close,

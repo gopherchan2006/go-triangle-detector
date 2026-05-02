@@ -15,7 +15,6 @@ import (
 	"triangle-detector/internal/domain"
 )
 
-// APIError is returned when Binance responds with a non-200 status code.
 type APIError struct {
 	StatusCode int
 	Body       string
@@ -25,19 +24,16 @@ func (e *APIError) Error() string {
 	return fmt.Sprintf("binance API error %d: %s", e.StatusCode, e.Body)
 }
 
-// KlineReader fetches raw kline data from a market data source.
 type KlineReader interface {
 	FetchKlines(ctx context.Context, symbol, interval string, startMs, endMs int64, limit int) ([]byte, error)
 	FetchLastKlines(ctx context.Context, symbol, interval string, n int) ([]byte, error)
 }
 
-// Reader implements KlineReader against the Binance REST API.
 type Reader struct {
 	client  *http.Client
 	baseURL string
 }
 
-// NewReader creates a Reader with a 15-second timeout.
 func NewReader() *Reader {
 	return &Reader{
 		client:  &http.Client{Timeout: 15 * time.Second},
@@ -89,7 +85,6 @@ func (r *Reader) get(ctx context.Context, path string) ([]byte, error) {
 	return body, nil
 }
 
-// CandleRequestParams holds parameters for a candle load request.
 type CandleRequestParams struct {
 	Symbol    string
 	Interval  string
@@ -97,7 +92,6 @@ type CandleRequestParams struct {
 	EndTime   string
 }
 
-// LoadCandles fetches candles for the given params using direct HTTP.
 func LoadCandles(params CandleRequestParams) ([]domain.Candle, error) {
 	if params.Interval == "" {
 		params.Interval = "15m"
@@ -198,7 +192,6 @@ func fetchCandles(symbol, interval, startStr, endStr string, limit int) ([]domai
 	return allCandles, nil
 }
 
-// LoadLastNCandles fetches the n most recent completed candles.
 func LoadLastNCandles(symbol, interval string, n int) ([]domain.Candle, error) {
 	if n <= 0 {
 		n = 50
@@ -272,7 +265,6 @@ func isNetworkError(err error) bool {
 	return errors.As(err, &dnsErr)
 }
 
-// ParseKlines parses raw Binance kline JSON into a slice of Candles.
 func ParseKlines(body []byte) ([]domain.Candle, error) {
 	var raw [][]interface{}
 	if err := json.Unmarshal(body, &raw); err != nil {
@@ -305,7 +297,6 @@ func ParseKlines(body []byte) ([]domain.Candle, error) {
 	return candles, nil
 }
 
-// FetchAllUSDTSymbols returns all actively-trading USDT spot pairs on Binance.
 func FetchAllUSDTSymbols() ([]string, error) {
 	resp, err := http.Get("https://api.binance.com/api/v3/exchangeInfo?permissions=SPOT")
 	if err != nil {

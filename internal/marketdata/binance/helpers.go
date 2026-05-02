@@ -29,7 +29,6 @@ func parseFloat(value interface{}) (float64, bool) {
 	}
 }
 
-// IntervalToMilliseconds converts a Binance interval string (e.g. "15m") to milliseconds.
 func IntervalToMilliseconds(interval string) (int64, error) {
 	if len(interval) < 2 {
 		return 0, fmt.Errorf("unsupported interval %q", interval)

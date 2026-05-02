@@ -1,12 +1,10 @@
 package detect
 
-// SwingPoint is an index + value pair representing a local high or low.
 type SwingPoint struct {
 	Index int
 	Value float64
 }
 
-// ATRDebug holds ATR calculation diagnostics.
 type ATRDebug struct {
 	AvgPrice   float64
 	ATRValue   float64
@@ -14,13 +12,11 @@ type ATRDebug struct {
 	CalcATRLog string
 }
 
-// SwingDebug holds swing high detection diagnostics.
 type SwingDebug struct {
 	SwingHighsCount   int
 	FindSwingHighsLog string
 }
 
-// ResistanceDebug holds horizontal resistance diagnostics.
 type ResistanceDebug struct {
 	ResistanceLevel             float64
 	ResistanceTouches           int
@@ -30,7 +26,6 @@ type ResistanceDebug struct {
 	FindHorizontalResistanceLog string
 }
 
-// SupportDebug holds valley/support line diagnostics.
 type SupportDebug struct {
 	ValleysCount     int
 	FirstVIdx        int
@@ -42,7 +37,6 @@ type SupportDebug struct {
 	ValleyDeviation  float64
 }
 
-// GeometryDebug holds triangle geometry diagnostics.
 type GeometryDebug struct {
 	PatternStart      int
 	PatternEnd        int
@@ -59,7 +53,6 @@ type GeometryDebug struct {
 	PatternWidth      float64
 }
 
-// DebugInfo contains diagnostic values collected during a single detection run.
 type DebugInfo struct {
 	ATR        ATRDebug
 	Swing      SwingDebug
@@ -68,7 +61,6 @@ type DebugInfo struct {
 	Geometry   GeometryDebug
 }
 
-// Result is the output of DetectAscendingTriangle.
 type Result struct {
 	Found                 bool
 	RejectReason          RejectReason
@@ -84,7 +76,6 @@ type Result struct {
 	BreakoutVolumeRatio   float64
 }
 
-// CalcATRBarTrace holds per-bar trace data for the ATR calculation.
 type CalcATRBarTrace struct {
 	Index                 int
 	FirstBar              bool
@@ -98,7 +89,6 @@ type CalcATRBarTrace struct {
 	SumTR    float64
 }
 
-// CalcATRDebugSnapshot is a full trace snapshot for calcATR.
 type CalcATRDebugSnapshot struct {
 	BarCount int
 	Bars     []CalcATRBarTrace
@@ -106,7 +96,6 @@ type CalcATRDebugSnapshot struct {
 	ATR      float64
 }
 
-// SwingHighScanRow is a per-bar row produced during swing-high scanning.
 type SwingHighScanRow struct {
 	Index       int
 	High        float64
@@ -115,7 +104,6 @@ type SwingHighScanRow struct {
 	BlockHigh   float64
 }
 
-// FindSwingHighsDebugSnapshot is the full snapshot for findSwingHighs.
 type FindSwingHighsDebugSnapshot struct {
 	Radius     int
 	N          int
@@ -123,7 +111,6 @@ type FindSwingHighsDebugSnapshot struct {
 	SwingHighs []SwingPoint
 }
 
-// HorizontalResistanceGroupDebug holds details about one resistance cluster.
 type HorizontalResistanceGroupDebug struct {
 	Points      []SwingPoint
 	Sum         float64
@@ -131,7 +118,6 @@ type HorizontalResistanceGroupDebug struct {
 	SpacedValid []SwingPoint
 }
 
-// FindHorizontalResistanceDebugSnapshot is the full snapshot for findHorizontalResistance.
 type FindHorizontalResistanceDebugSnapshot struct {
 	Vol             float64
 	Tolerance       float64
