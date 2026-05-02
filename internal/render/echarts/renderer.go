@@ -266,5 +266,3 @@ func (r *EChartsRenderer) buildLineOverlay(ov overlay) *charts.Line {
 
 	return line
 }
-
-

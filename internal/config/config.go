@@ -38,4 +38,3 @@ func LoadEnvFile(path string) error {
 	}
 	return scanner.Err()
 }
-

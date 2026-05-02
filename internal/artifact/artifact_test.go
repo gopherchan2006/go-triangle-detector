@@ -22,4 +22,3 @@ func TestNewNames_Paths(t *testing.T) {
 		t.Errorf("HTMLTmp should end with .html, got %q", names.HTMLTmp)
 	}
 }
-
