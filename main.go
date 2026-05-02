@@ -205,12 +205,12 @@ func analyzeSymbol(symbol, interval, startDate, endDate string, dataDir string, 
 
 	windowSize := 50
 	patterns := 0
-	rejectStats := make(map[RejectReason]*int)
+	counter := NewMapCounter()
 	rejectChartCounts := make(map[RejectReason]int)
 
 	for i := 0; i <= len(candles)-windowSize; i++ {
 		window := candles[i : i+windowSize]
-		result := DetectAscendingTriangle(window, DefaultDetectorParams(), rejectStats)
+		result := DetectAscendingTriangle(window, WithCounter(counter))
 
 		if result.Found {
 			patterns++
@@ -297,8 +297,8 @@ func analyzeSymbol(symbol, interval, startDate, endDate string, dataDir string, 
 	fmt.Printf("[%s] Analysis complete. Found %d pattern(s). Charts saved to: %s\n", symbol, patterns, chartDir)
 
 	fmt.Printf("[%s] --- Reject reasons ---\n", symbol)
-	for reason, count := range rejectStats {
+	for reason, count := range counter.Snapshot() {
 		saved := rejectChartCounts[reason]
-		fmt.Printf("[%s]   %-40s hits: %d  charts: %d\n", symbol, reason, *count, saved)
+		fmt.Printf("[%s]   %-40s hits: %d  charts: %d\n", symbol, reason, count, saved)
 	}
 }
