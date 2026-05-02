@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func loadEnvFile(path string) error {
+func LoadEnvFile(path string) error {
 	f, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
