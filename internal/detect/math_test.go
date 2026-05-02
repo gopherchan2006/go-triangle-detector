@@ -8,7 +8,7 @@ import (
 )
 
 func TestLinearRegression_PositiveSlope(t *testing.T) {
-	// perfect linear: y = 2x + 1
+
 	points := []SwingPoint{
 		{Index: 0, Value: 1},
 		{Index: 1, Value: 3},
@@ -25,7 +25,7 @@ func TestLinearRegression_PositiveSlope(t *testing.T) {
 }
 
 func TestLinearRegression_ZeroSlope(t *testing.T) {
-	// constant y = 5 -> slope=0
+
 	points := []SwingPoint{
 		{Index: 0, Value: 5},
 		{Index: 1, Value: 5},
@@ -53,7 +53,7 @@ func TestRSquared_PerfectFit(t *testing.T) {
 }
 
 func TestRSquared_BadPrediction(t *testing.T) {
-	// points have real variance, but prediction is completely wrong (constant 100)
+
 	points := []SwingPoint{
 		{Index: 0, Value: 1},
 		{Index: 1, Value: 2},
@@ -70,16 +70,14 @@ func TestCalcATR_SingleBar(t *testing.T) {
 		{Open: 100, High: 110, Low: 90, Close: 105, Volume: 1000},
 	}
 	atr := calcATR(candles)
-	expected := 110.0 - 90.0 // HL for first bar
+	expected := 110.0 - 90.0
 	if math.Abs(atr-expected) > 0.001 {
 		t.Errorf("expected ATR=%.2f for single bar, got %.2f", expected, atr)
 	}
 }
 
 func TestCalcATR_TwoBars(t *testing.T) {
-	// bar0: H=110, L=90, close=100 -> TR=20
-	// bar1: H=108, L=92, prev_close=100 -> HL=16, |H-prevC|=8, |L-prevC|=8 -> TR=16
-	// ATR = (20+16)/2 = 18
+
 	candles := []domain.Candle{
 		{Open: 95, High: 110, Low: 90, Close: 100, Volume: 1000},
 		{Open: 100, High: 108, Low: 92, Close: 104, Volume: 1000},

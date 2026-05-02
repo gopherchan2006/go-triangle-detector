@@ -16,4 +16,3 @@ func LoadAppConfig() AppConfig {
 		Symbols: os.Getenv("SYMBOLS"),
 	}
 }
-

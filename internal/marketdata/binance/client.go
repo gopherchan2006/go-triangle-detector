@@ -159,7 +159,7 @@ func fetchCandles(symbol, interval, startStr, endStr string, limit int) ([]domai
 		}
 		endpoint := "https://api.binance.com/api/v3/klines?" + query.Encode()
 
-		resp, err := http.Get(endpoint) //nolint:noctx
+		resp, err := http.Get(endpoint)
 		if err != nil {
 			return nil, fmt.Errorf("binance request failed: %w", err)
 		}
@@ -223,7 +223,7 @@ func LoadLastNCandles(symbol, interval string, n int) ([]domain.Candle, error) {
 			time.Sleep(retryDelays[attempt-1])
 		}
 
-		resp, err := http.Get(endpoint) //nolint:noctx
+		resp, err := http.Get(endpoint)
 		if err != nil {
 			lastErr = fmt.Errorf("binance request failed: %w", err)
 			if isNetworkError(err) {
@@ -307,7 +307,7 @@ func ParseKlines(body []byte) ([]domain.Candle, error) {
 
 // FetchAllUSDTSymbols returns all actively-trading USDT spot pairs on Binance.
 func FetchAllUSDTSymbols() ([]string, error) {
-	resp, err := http.Get("https://api.binance.com/api/v3/exchangeInfo?permissions=SPOT") //nolint:noctx
+	resp, err := http.Get("https://api.binance.com/api/v3/exchangeInfo?permissions=SPOT")
 	if err != nil {
 		return nil, fmt.Errorf("exchangeInfo request failed: %w", err)
 	}

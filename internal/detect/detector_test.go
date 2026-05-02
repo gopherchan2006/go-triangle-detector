@@ -34,7 +34,7 @@ func TestDetectAscendingTriangle_EmptyCandles(t *testing.T) {
 }
 
 func TestDetectAscendingTriangle_RejectReasonSet(t *testing.T) {
-	// 50 flat candles - should reject (no triangle pattern)
+
 	candles := make([]domain.Candle, 50)
 	for i := range candles {
 		candles[i] = makeCandle(100.0)

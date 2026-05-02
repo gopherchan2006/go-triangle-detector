@@ -24,10 +24,6 @@ import (
 	"triangle-detector/internal/screenshot"
 )
 
-// ────────────────────────────────────────────────
-// Batch analysis
-// ────────────────────────────────────────────────
-
 func sanitizeReason(reason detect.RejectReason) string {
 	r := strings.ReplaceAll(string(reason), "<", "lt")
 	r = strings.ReplaceAll(r, ">", "gt")
@@ -211,10 +207,6 @@ func analyzeSymbol(ctx context.Context, sym, interval, startDate, endDate string
 		fmt.Printf("[%s]   %-40s hits: %d  charts: %d\n", sym, reason, count, saved)
 	}
 }
-
-// ────────────────────────────────────────────────
-// Realtime scanning
-// ────────────────────────────────────────────────
 
 type realtimeConfig struct {
 	Interval        string
@@ -421,10 +413,6 @@ func nextCandleClose(now time.Time, interval time.Duration) time.Time {
 	}
 	return next
 }
-
-// ────────────────────────────────────────────────
-// Entry point
-// ────────────────────────────────────────────────
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

@@ -72,4 +72,3 @@ func linearRegression(points []SwingPoint) (slope, intercept float64) {
 	intercept = (sumY - slope*sumX) / n
 	return
 }
-

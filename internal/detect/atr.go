@@ -1,11 +1,11 @@
 package detect
 
 import (
-	"triangle-detector/internal/domain"
 	"fmt"
 	"math"
 	"strconv"
 	"strings"
+	"triangle-detector/internal/domain"
 )
 
 func collectCalcATRDebug(candles []domain.Candle) CalcATRDebugSnapshot {
@@ -135,6 +135,3 @@ func atrFmt(x float64) string {
 func calcATR(candles []domain.Candle) float64 {
 	return collectCalcATRDebug(candles).ATR
 }
-
-
-

@@ -71,4 +71,3 @@ func (s *Screenshotter) Screenshot(htmlPath, pngPath string) error {
 
 	return os.WriteFile(pngPath, buf, 0o644)
 }
-

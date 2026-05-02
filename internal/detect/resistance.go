@@ -1,10 +1,10 @@
 package detect
 
 import (
-	"triangle-detector/internal/domain"
 	"fmt"
 	"math"
 	"strings"
+	"triangle-detector/internal/domain"
 )
 
 func collectFindHorizontalResistanceDebug(candles []domain.Candle, highs []SwingPoint, vol float64, p Params) FindHorizontalResistanceDebugSnapshot {
@@ -205,4 +205,3 @@ func findHorizontalResistance(candles []domain.Candle, highs []SwingPoint, vol f
 	s := collectFindHorizontalResistanceDebug(candles, highs, vol, p)
 	return s.Level, s.Touches, s.TouchPoints
 }
-
