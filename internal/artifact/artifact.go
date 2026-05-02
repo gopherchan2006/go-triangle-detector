@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"triangle-detector/internal/detect"
+	"github.com/gopherchan2006/go-triangle-detector/internal/detect"
 )
 
 type Names struct {

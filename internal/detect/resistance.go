@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
-	"triangle-detector/internal/domain"
+	"github.com/gopherchan2006/go-triangle-detector/internal/domain"
 )
 
 func collectFindHorizontalResistanceDebug(candles []domain.Candle, highs []SwingPoint, vol float64, p Params) FindHorizontalResistanceDebugSnapshot {

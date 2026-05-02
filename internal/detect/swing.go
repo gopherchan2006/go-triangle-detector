@@ -3,7 +3,7 @@ package detect
 import (
 	"fmt"
 	"strings"
-	"triangle-detector/internal/domain"
+	"github.com/gopherchan2006/go-triangle-detector/internal/domain"
 )
 
 func collectFindSwingHighsDebug(candles []domain.Candle, radius int) FindSwingHighsDebugSnapshot {

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"triangle-detector/internal/artifact"
+	"github.com/gopherchan2006/go-triangle-detector/internal/artifact"
 )
 
 func TestNewNames_Paths(t *testing.T) {

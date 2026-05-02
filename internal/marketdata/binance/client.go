@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"time"
 
-	"triangle-detector/internal/domain"
+	"github.com/gopherchan2006/go-triangle-detector/internal/domain"
 )
 
 type APIError struct {

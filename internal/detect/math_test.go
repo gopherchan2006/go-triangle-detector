@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 
-	"triangle-detector/internal/domain"
+	"github.com/gopherchan2006/go-triangle-detector/internal/domain"
 )
 
 func TestLinearRegression_PositiveSlope(t *testing.T) {

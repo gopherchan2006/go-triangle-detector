@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"triangle-detector/internal/detect"
-	"triangle-detector/internal/domain"
+	"github.com/gopherchan2006/go-triangle-detector/internal/detect"
+	"github.com/gopherchan2006/go-triangle-detector/internal/domain"
 
 	"github.com/go-echarts/go-echarts/v2/charts"
 	"github.com/go-echarts/go-echarts/v2/components"

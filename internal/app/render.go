@@ -3,9 +3,9 @@ package app
 import (
 	"fmt"
 
-	"triangle-detector/internal/detect"
-	"triangle-detector/internal/domain"
-	"triangle-detector/internal/render"
+	"github.com/gopherchan2006/go-triangle-detector/internal/detect"
+	"github.com/gopherchan2006/go-triangle-detector/internal/domain"
+	"github.com/gopherchan2006/go-triangle-detector/internal/render"
 )
 
 func RenderTriangleDetection(

@@ -14,14 +14,14 @@ import (
 	"syscall"
 	"time"
 
-	"triangle-detector/internal/app"
-	"triangle-detector/internal/artifact"
-	"triangle-detector/internal/config"
-	"triangle-detector/internal/detect"
-	"triangle-detector/internal/domain"
-	"triangle-detector/internal/marketdata/binance"
-	"triangle-detector/internal/render/echarts"
-	"triangle-detector/internal/screenshot"
+	"github.com/gopherchan2006/go-triangle-detector/internal/app"
+	"github.com/gopherchan2006/go-triangle-detector/internal/artifact"
+	"github.com/gopherchan2006/go-triangle-detector/internal/config"
+	"github.com/gopherchan2006/go-triangle-detector/internal/detect"
+	"github.com/gopherchan2006/go-triangle-detector/internal/domain"
+	"github.com/gopherchan2006/go-triangle-detector/internal/marketdata/binance"
+	"github.com/gopherchan2006/go-triangle-detector/internal/render/echarts"
+	"github.com/gopherchan2006/go-triangle-detector/internal/screenshot"
 )
 
 func sanitizeReason(reason detect.RejectReason) string {

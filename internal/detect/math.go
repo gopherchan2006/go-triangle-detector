@@ -1,6 +1,6 @@
 package detect
 
-import "triangle-detector/internal/domain"
+import "github.com/gopherchan2006/go-triangle-detector/internal/domain"
 
 func findValleysBetweenTouches(candles []domain.Candle, touches []SwingPoint) []SwingPoint {
 	var valleys []SwingPoint

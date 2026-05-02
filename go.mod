@@ -1,4 +1,4 @@
-module triangle-detector
+module github.com/gopherchan2006/go-triangle-detector
 
 go 1.26
 

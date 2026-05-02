@@ -5,7 +5,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
-	"triangle-detector/internal/domain"
+	"github.com/gopherchan2006/go-triangle-detector/internal/domain"
 )
 
 func collectCalcATRDebug(candles []domain.Candle) CalcATRDebugSnapshot {

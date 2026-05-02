@@ -3,7 +3,7 @@ package detect
 import (
 	"math"
 
-	"triangle-detector/internal/domain"
+	"github.com/gopherchan2006/go-triangle-detector/internal/domain"
 )
 
 type pipeCtx struct {
