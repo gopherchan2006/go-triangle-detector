@@ -85,6 +85,7 @@ func main() {
 	}
 
 	_ = loadEnvFile(".env")
+	appCfg := LoadAppConfig()
 
 	if *interval == "" {
 		*interval = "15m"
@@ -120,7 +121,7 @@ func main() {
 		*endDate = "2026-04-18"
 	}
 
-	dataDir := os.Getenv("DATA_DIR")
+	dataDir := appCfg.DataDir
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
 		log.Fatalf("failed to create data dir: %v", err)
 	}
@@ -129,7 +130,7 @@ func main() {
 	if *symbol != "" {
 		symbols = []string{*symbol}
 	} else {
-		raw := os.Getenv("SYMBOLS")
+		raw := appCfg.Symbols
 		for _, s := range strings.Split(raw, ",") {
 			s = strings.TrimSpace(s)
 			if s != "" {
