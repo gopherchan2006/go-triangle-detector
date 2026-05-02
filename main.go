@@ -71,6 +71,24 @@ func writeCalcATRDebugTxt(txtPath string, logContent string) {
 	}
 }
 
+func writeFindSwingHighsDebugTxt(txtPath string, logContent string) {
+	if strings.TrimSpace(logContent) == "" {
+		return
+	}
+	if err := os.WriteFile(txtPath, []byte(logContent), 0o644); err != nil {
+		log.Printf("writeFindSwingHighsDebugTxt: %v", err)
+	}
+}
+
+func writeFindHorizontalResistanceDebugTxt(txtPath string, logContent string) {
+	if strings.TrimSpace(logContent) == "" {
+		return
+	}
+	if err := os.WriteFile(txtPath, []byte(logContent), 0o644); err != nil {
+		log.Printf("writeFindHorizontalResistanceDebugTxt: %v", err)
+	}
+}
+
 func main() {
 	symbol := flag.String("symbol", "", "Trading pair symbol, e.g. BTCUSDT")
 	interval := flag.String("interval", "", "Candle interval, e.g. 15m")
@@ -210,6 +228,8 @@ func analyzeSymbol(symbol, interval, startDate, endDate string, dataDir string, 
 			pngFile := filepath.Join(groupDir, fmt.Sprintf("1_%s_1.png", stem))
 			debugTxt := filepath.Join(groupDir, fmt.Sprintf("2_%s_2.txt", stem))
 			calcATRTxt := filepath.Join(groupDir, fmt.Sprintf("3_%s_calcATR_3.txt", stem))
+			swingTxt := filepath.Join(groupDir, fmt.Sprintf("4_%s_findSwingHighs_4.txt", stem))
+			horizTxt := filepath.Join(groupDir, fmt.Sprintf("5_%s_findHorizontalResistance_5.txt", stem))
 
 			renderer := NewEChartsRenderer()
 			renderer.SetCaption(symbol, time.Now().UTC())
@@ -223,6 +243,8 @@ func analyzeSymbol(symbol, interval, startDate, endDate string, dataDir string, 
 			}
 			writeDebugTxt(debugTxt, result)
 			writeCalcATRDebugTxt(calcATRTxt, result.Debug.CalcATRLog)
+			writeFindSwingHighsDebugTxt(swingTxt, result.Debug.FindSwingHighsLog)
+			writeFindHorizontalResistanceDebugTxt(horizTxt, result.Debug.FindHorizontalResistanceLog)
 			_ = os.Remove(htmlTmp)
 
 			fmt.Printf("[%s] [Pattern #%d] %s | Resistance: %.2f | Support slope: %.4f\n",

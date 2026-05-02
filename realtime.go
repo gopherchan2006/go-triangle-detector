@@ -185,6 +185,8 @@ func takeRealtimeScreenshot(r scanResult, cfg RealtimeConfig, ss *Screenshotter)
 	}
 	pngFile := filepath.Join(groupDir, fmt.Sprintf("1_%s_1.png", stem))
 	calcATRTxt := filepath.Join(groupDir, fmt.Sprintf("3_%s_calcATR_3.txt", stem))
+	swingTxt := filepath.Join(groupDir, fmt.Sprintf("4_%s_findSwingHighs_4.txt", stem))
+	horizTxt := filepath.Join(groupDir, fmt.Sprintf("5_%s_findHorizontalResistance_5.txt", stem))
 
 	renderer := NewEChartsRenderer()
 	renderer.SetCaption(r.symbol, time.Now().UTC())
@@ -198,6 +200,8 @@ func takeRealtimeScreenshot(r scanResult, cfg RealtimeConfig, ss *Screenshotter)
 	}
 	_ = os.Remove(htmlTmp)
 	writeCalcATRDebugTxt(calcATRTxt, r.result.Debug.CalcATRLog)
+	writeFindSwingHighsDebugTxt(swingTxt, r.result.Debug.FindSwingHighsLog)
+	writeFindHorizontalResistanceDebugTxt(horizTxt, r.result.Debug.FindHorizontalResistanceLog)
 	fmt.Printf("[realtime] [%s] screenshot saved: %s\n", r.symbol, pngFile)
 }
 

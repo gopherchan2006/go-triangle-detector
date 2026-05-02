@@ -13,37 +13,39 @@ type SwingPoint struct {
 }
 
 type DebugInfo struct {
-	AvgPrice           float64
-	ATR                float64
-	Vol                float64
-	CalcATRLog         string
-	SwingHighsCount    int
-	ResistanceLevel    float64
-	ResistanceTouches  int
-	FirstTouchIdx      int
-	HighAboveThreshold float64
-	CrashThreshold     float64
-	ValleysCount       int
-	FirstVIdx          int
-	MaxCrashRange      float64
-	AllowedFlat        float64
-	SupportSlope       float64
-	SupportIntercept   float64
-	MaxValleyDepth     float64
-	ValleyDeviation    float64
-	PatternStart       int
-	PatternEnd         int
-	XIntersect         float64
-	LastX              float64
-	CeilingTol         float64
-	Ceiling            float64
-	FloorTol           float64
-	HeightAtStart      float64
-	HeightAtEnd        float64
-	LastResistanceIdx  int
-	LastValleyIdx      int
-	PEnd               int
-	PatternWidth       float64
+	AvgPrice                    float64
+	ATR                         float64
+	Vol                         float64
+	CalcATRLog                  string
+	FindSwingHighsLog           string
+	FindHorizontalResistanceLog string
+	SwingHighsCount             int
+	ResistanceLevel             float64
+	ResistanceTouches           int
+	FirstTouchIdx               int
+	HighAboveThreshold          float64
+	CrashThreshold              float64
+	ValleysCount                int
+	FirstVIdx                   int
+	MaxCrashRange               float64
+	AllowedFlat                 float64
+	SupportSlope                float64
+	SupportIntercept            float64
+	MaxValleyDepth              float64
+	ValleyDeviation             float64
+	PatternStart                int
+	PatternEnd                  int
+	XIntersect                  float64
+	LastX                       float64
+	CeilingTol                  float64
+	Ceiling                     float64
+	FloorTol                    float64
+	HeightAtStart               float64
+	HeightAtEnd                 float64
+	LastResistanceIdx           int
+	LastValleyIdx               int
+	PEnd                        int
+	PatternWidth                float64
 }
 
 type CalcATRBarTrace struct {
@@ -66,6 +68,48 @@ type CalcATRDebugSnapshot struct {
 	ATR      float64
 }
 
+type SwingHighScanRow struct {
+	Index       int
+	High        float64
+	IsSwingHigh bool
+	BlockIndex  int
+	BlockHigh   float64
+}
+
+type FindSwingHighsDebugSnapshot struct {
+	Radius     int
+	N          int
+	Rows       []SwingHighScanRow
+	SwingHighs []SwingPoint
+}
+
+type HorizontalResistanceGroupDebug struct {
+	Points      []SwingPoint
+	Sum         float64
+	AvgAll      float64
+	SpacedValid []SwingPoint
+}
+
+type FindHorizontalResistanceDebugSnapshot struct {
+	Vol             float64
+	Tolerance       float64
+	Breakout        float64
+	MinSpacing      int
+	HighsIn         []SwingPoint
+	Groups          []HorizontalResistanceGroupDebug
+	BestGroupIdx    int
+	BestLevel       float64
+	BestTouchPoints []SwingPoint
+	FailReason      string
+	FailPairIdx     int
+	FailBar         int
+	FailClose       float64
+	FailLimit       float64
+	Level           float64
+	Touches         int
+	TouchPoints     []SwingPoint
+}
+
 type AscendingTriangleResult struct {
 	Found                 bool
 	RejectReason          string
@@ -76,9 +120,9 @@ type AscendingTriangleResult struct {
 	SupportIntercept      float64
 	SupportTouchPoints    []SwingPoint
 	Debug                 DebugInfo
-	TargetPrice         float64
-	BreakoutDetected    bool
-	BreakoutVolumeRatio float64
+	TargetPrice           float64
+	BreakoutDetected      bool
+	BreakoutVolumeRatio   float64
 }
 
 func DetectAscendingTriangle(candles []Candle, rejectStats map[string]*int) AscendingTriangleResult {
@@ -112,13 +156,17 @@ func detectAscendingTriangle(candles []Candle, rejectStats map[string]*int) Asce
 	dbg.CalcATRLog = formatCalcATRDebug(atrSnap)
 
 	const swingRadius = 3
-	swingHighs := findSwingHighs(candles, swingRadius)
+	swingSnap := collectFindSwingHighsDebug(candles, swingRadius)
+	swingHighs := swingSnap.SwingHighs
+	dbg.FindSwingHighsLog = formatFindSwingHighsDebug(swingSnap)
 	dbg.SwingHighsCount = len(swingHighs)
 	if len(swingHighs) < 2 {
 		return reject("01_few_swing_highs", rejectStats)
 	}
 
-	resistanceLevel, resistanceTouches, resistanceTouchPoints := findHorizontalResistance(candles, swingHighs, vol)
+	rhSnap := collectFindHorizontalResistanceDebug(candles, swingHighs, vol)
+	dbg.FindHorizontalResistanceLog = formatFindHorizontalResistanceDebug(rhSnap)
+	resistanceLevel, resistanceTouches, resistanceTouchPoints := rhSnap.Level, rhSnap.Touches, rhSnap.TouchPoints
 	dbg.ResistanceLevel = resistanceLevel
 	dbg.ResistanceTouches = resistanceTouches
 	if resistanceTouches < 3 {
@@ -346,21 +394,80 @@ func detectAscendingTriangle(candles []Candle, rejectStats map[string]*int) Asce
 	}
 }
 
-func findSwingHighs(candles []Candle, radius int) []SwingPoint {
-	var highs []SwingPoint
-	for i := radius; i < len(candles)-radius; i++ {
+func collectFindSwingHighsDebug(candles []Candle, radius int) FindSwingHighsDebugSnapshot {
+	n := len(candles)
+	snap := FindSwingHighsDebugSnapshot{
+		Radius:     radius,
+		N:          n,
+		Rows:       nil,
+		SwingHighs: nil,
+	}
+	if n < radius*2+1 {
+		return snap
+	}
+	for i := radius; i < n-radius; i++ {
+		centerH := candles[i].High
 		isHigh := true
+		blockIdx := -1
+		blockH := 0.0
 		for j := i - radius; j <= i+radius; j++ {
-			if j != i && candles[j].High >= candles[i].High {
+			if j != i && candles[j].High >= centerH {
 				isHigh = false
+				blockIdx = j
+				blockH = candles[j].High
 				break
 			}
 		}
+
+		snap.Rows = append(snap.Rows, SwingHighScanRow{
+			Index:       i,
+			High:        centerH,
+			IsSwingHigh: isHigh,
+			BlockIndex:  blockIdx,
+			BlockHigh:   blockH,
+		})
+
 		if isHigh {
-			highs = append(highs, SwingPoint{Index: i, Value: candles[i].High})
+			snap.SwingHighs = append(snap.SwingHighs, SwingPoint{Index: i, Value: centerH})
 		}
 	}
-	return highs
+
+	return snap
+}
+
+func formatFindSwingHighsDebug(s FindSwingHighsDebugSnapshot) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "findSwingHighs step-by-step trace\n")
+	fmt.Fprintf(&b, "radius=%d  n=%d candles  scanned indices [%d .. %d)\n\n",
+		s.Radius, s.N, s.Radius, max(s.N-s.Radius, 0))
+
+	if len(s.Rows) == 0 {
+		fmt.Fprintf(&b, "(no indices scanned: need n >= 2*radius+1)\n")
+		return b.String()
+	}
+
+	for _, row := range s.Rows {
+		fmt.Fprintf(&b, "i=%d  High=%s\n", row.Index, atrFmt(row.High))
+		if row.IsSwingHigh {
+			fmt.Fprintf(&b, "  swing high: yes (strict max High on [%d .. %d] inclusive)\n",
+				row.Index-s.Radius, row.Index+s.Radius)
+		} else {
+			fmt.Fprintf(&b, "  swing high: no — bar j=%d has High=%s >= center (first such j in window)\n",
+				row.BlockIndex, atrFmt(row.BlockHigh))
+		}
+		fmt.Fprintf(&b, "\n")
+	}
+
+	fmt.Fprintf(&b, "---\n")
+	fmt.Fprintf(&b, "swing highs count: %d\n", len(s.SwingHighs))
+	for k, p := range s.SwingHighs {
+		fmt.Fprintf(&b, "  [%d] index=%d value=%s\n", k, p.Index, atrFmt(p.Value))
+	}
+	return b.String()
+}
+
+func findSwingHighs(candles []Candle, radius int) []SwingPoint {
+	return collectFindSwingHighsDebug(candles, radius).SwingHighs
 }
 
 func collectCalcATRDebug(candles []Candle) CalcATRDebugSnapshot {
@@ -542,14 +649,22 @@ func rSquared(points []SwingPoint, slope, intercept float64) float64 {
 	return 1.0 - ssRes/ssTot
 }
 
-func findHorizontalResistance(candles []Candle, highs []SwingPoint, vol float64) (level float64, touches int, touchPoints []SwingPoint) {
+func collectFindHorizontalResistanceDebug(candles []Candle, highs []SwingPoint, vol float64) FindHorizontalResistanceDebugSnapshot {
+	snap := FindHorizontalResistanceDebugSnapshot{
+		Vol:     vol,
+		HighsIn: append([]SwingPoint(nil), highs...),
+	}
 	if len(highs) < 2 {
-		return 0, 0, nil
+		snap.FailReason = "few_input_highs (need >= 2 swing highs)"
+		return snap
 	}
 
 	tolerance := math.Max(0.002, vol*0.8)
 	const breakout = 0.005
 	const minSpacing = 5
+	snap.Tolerance = tolerance
+	snap.Breakout = breakout
+	snap.MinSpacing = minSpacing
 
 	type levelGroup struct {
 		points []SwingPoint
@@ -574,17 +689,29 @@ func findHorizontalResistance(candles []Candle, highs []SwingPoint, vol float64)
 		}
 	}
 
-	bestLevel := 0.0
-	maxTouches := 0
-	var bestTouchPoints []SwingPoint
-
 	for _, g := range groups {
+		avgAll := g.sum / float64(len(g.points))
 		valid := []SwingPoint{g.points[0]}
 		for i := 1; i < len(g.points); i++ {
 			if g.points[i].Index-valid[len(valid)-1].Index >= minSpacing {
 				valid = append(valid, g.points[i])
 			}
 		}
+		snap.Groups = append(snap.Groups, HorizontalResistanceGroupDebug{
+			Points:      append([]SwingPoint(nil), g.points...),
+			Sum:         g.sum,
+			AvgAll:      avgAll,
+			SpacedValid: append([]SwingPoint(nil), valid...),
+		})
+	}
+
+	bestLevel := 0.0
+	maxTouches := 0
+	bestGroupIdx := -1
+	var bestTouchPoints []SwingPoint
+
+	for gi, g := range groups {
+		valid := snap.Groups[gi].SpacedValid
 		if len(valid) < 2 {
 			continue
 		}
@@ -593,31 +720,132 @@ func findHorizontalResistance(candles []Candle, highs []SwingPoint, vol float64)
 			avg := g.sum / float64(len(g.points))
 			bestLevel = avg
 			bestTouchPoints = valid
+			bestGroupIdx = gi
 		}
 	}
 
+	snap.BestGroupIdx = bestGroupIdx
+	snap.BestLevel = bestLevel
+	snap.BestTouchPoints = append([]SwingPoint(nil), bestTouchPoints...)
+
 	if maxTouches < 2 {
-		return 0, 0, nil
+		snap.FailReason = "no_group_with_>=2_spaced_touches (minSpacing between swing highs)"
+		return snap
 	}
+
+	limit := bestLevel * (1 + breakout)
+	snap.FailLimit = limit
 
 	for i := 0; i < len(bestTouchPoints)-1; i++ {
 		start := bestTouchPoints[i].Index
 		end := bestTouchPoints[i+1].Index
 		for j := start; j <= end && j < len(candles); j++ {
-			if candles[j].Close > bestLevel*(1+breakout) {
-				return 0, 0, nil
+			if candles[j].Close > limit {
+				snap.FailReason = "close_breakout_between_touch_indices"
+				snap.FailPairIdx = i
+				snap.FailBar = j
+				snap.FailClose = candles[j].Close
+				return snap
 			}
 		}
 	}
 
 	lastIdx := bestTouchPoints[len(bestTouchPoints)-1].Index
 	for j := lastIdx; j < len(candles)-1; j++ {
-		if candles[j].Close > bestLevel*(1+breakout) {
-			return 0, 0, nil
+		if candles[j].Close > limit {
+			snap.FailReason = "close_breakout_after_last_touch"
+			snap.FailPairIdx = -1
+			snap.FailBar = j
+			snap.FailClose = candles[j].Close
+			return snap
 		}
 	}
 
-	return bestLevel, maxTouches, bestTouchPoints
+	snap.Level = bestLevel
+	snap.Touches = maxTouches
+	snap.TouchPoints = append([]SwingPoint(nil), bestTouchPoints...)
+	return snap
+}
+
+func formatFindHorizontalResistanceDebug(s FindHorizontalResistanceDebugSnapshot) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "findHorizontalResistance step-by-step trace\n")
+	fmt.Fprintf(&b, "input swing highs: %d  vol=%s\n\n", len(s.HighsIn), atrFmt(s.Vol))
+
+	if s.FailReason != "" && s.Level == 0 && len(s.TouchPoints) == 0 {
+		if strings.HasPrefix(s.FailReason, "few_input_highs") {
+			fmt.Fprintf(&b, "%s\n", s.FailReason)
+			return b.String()
+		}
+	}
+
+	fmt.Fprintf(&b, "tolerance = max(0.002, vol*0.8) = max(0.002, %s) = %s\n",
+		atrFmt(s.Vol*0.8), atrFmt(s.Tolerance))
+	fmt.Fprintf(&b, "breakout threshold on Close: level * (1 + %.5f)\n", s.Breakout)
+	fmt.Fprintf(&b, "min spacing between counted touches (bar index delta): %d\n\n", s.MinSpacing)
+
+	for hi, p := range s.HighsIn {
+		fmt.Fprintf(&b, "swing high [%d]: index=%d value=%s\n", hi, p.Index, atrFmt(p.Value))
+	}
+	fmt.Fprintf(&b, "\n--- clustering (each new high joins first group whose relative avg is within tolerance) ---\n")
+	for gi, g := range s.Groups {
+		fmt.Fprintf(&b, "group %d: avg(all points in cluster)=%s  sum=%s  raw points=%d\n",
+			gi, atrFmt(g.AvgAll), atrFmt(g.Sum), len(g.Points))
+		for _, p := range g.Points {
+			fmt.Fprintf(&b, "    index=%d value=%s\n", p.Index, atrFmt(p.Value))
+		}
+		fmt.Fprintf(&b, "  after minSpacing filter (>= %d bars since previous kept touch):\n", s.MinSpacing)
+		if len(g.SpacedValid) == 0 {
+			fmt.Fprintf(&b, "    (none)\n")
+		}
+		for _, p := range g.SpacedValid {
+			fmt.Fprintf(&b, "    index=%d value=%s\n", p.Index, atrFmt(p.Value))
+		}
+		fmt.Fprintf(&b, "  spaced touch count: %d\n\n", len(g.SpacedValid))
+	}
+
+	if s.BestGroupIdx >= 0 {
+		fmt.Fprintf(&b, "--- best group (max spaced touch count) ---\n")
+		fmt.Fprintf(&b, "bestGroupIdx=%d  resistance level (avg of all points in that cluster)=%s\n",
+			s.BestGroupIdx, atrFmt(s.BestLevel))
+		fmt.Fprintf(&b, "spaced touch points used for pattern:\n")
+		for _, p := range s.BestTouchPoints {
+			fmt.Fprintf(&b, "  index=%d value=%s\n", p.Index, atrFmt(p.Value))
+		}
+		fmt.Fprintf(&b, "\n")
+	}
+
+	if s.FailReason != "" {
+		fmt.Fprintf(&b, "--- result: rejected ---\n")
+		fmt.Fprintf(&b, "reason: %s\n", s.FailReason)
+		if strings.HasPrefix(s.FailReason, "no_group") {
+			return b.String()
+		}
+		fmt.Fprintf(&b, "max allowed Close (level * (1+breakout)) = %s\n", atrFmt(s.FailLimit))
+		if s.FailPairIdx >= 0 {
+			fmt.Fprintf(&b, "between touch pair index %d and %d in bestTouchPoints\n",
+				s.FailPairIdx, s.FailPairIdx+1)
+		} else if s.FailReason == "close_breakout_after_last_touch" {
+			fmt.Fprintf(&b, "segment: from last touch index to end of window (excluding final bar in loop bound)\n")
+		}
+		fmt.Fprintf(&b, "first offending bar: j=%d  Close=%s\n", s.FailBar, atrFmt(s.FailClose))
+		return b.String()
+	}
+
+	fmt.Fprintf(&b, "--- breakout check passed ---\n")
+	fmt.Fprintf(&b, "no Close > %s between consecutive spaced touches (inclusive)\n", atrFmt(s.FailLimit))
+	fmt.Fprintf(&b, "and no Close > %s from last touch through bar len(candles)-2\n\n", atrFmt(s.FailLimit))
+	fmt.Fprintf(&b, "--- return ---\n")
+	fmt.Fprintf(&b, "level=%s  touches=%d\n", atrFmt(s.Level), s.Touches)
+	for i, p := range s.TouchPoints {
+		fmt.Fprintf(&b, "  touch[%d] index=%d value=%s\n", i, p.Index, atrFmt(p.Value))
+	}
+	return b.String()
+}
+
+func findHorizontalResistance(candles []Candle, highs []SwingPoint, vol float64) (level float64, touches int, touchPoints []SwingPoint) {
+	s := collectFindHorizontalResistanceDebug(candles, highs, vol)
+	return s.Level, s.Touches, s.TouchPoints
 }
 
 func linearRegression(points []SwingPoint) (slope, intercept float64) {
