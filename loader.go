@@ -98,14 +98,15 @@ func fetchBinanceCandles(
 		if err != nil {
 			return nil, fmt.Errorf("binance request failed: %w", err)
 		}
-		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
 			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
 			return nil, fmt.Errorf("binance returned %d: %s", resp.StatusCode, string(body))
 		}
 
 		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
 		if err != nil {
 			return nil, fmt.Errorf("failed to read binance response: %w", err)
 		}
