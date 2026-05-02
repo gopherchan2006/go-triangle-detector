@@ -10,8 +10,8 @@ import (
 	"time"
 )
 
-func sanitizeReason(reason string) string {
-	r := strings.ReplaceAll(reason, "<", "lt")
+func sanitizeReason(reason RejectReason) string {
+	r := strings.ReplaceAll(string(reason), "<", "lt")
 	r = strings.ReplaceAll(r, ">", "gt")
 	r = strings.ReplaceAll(r, ":", "_")
 	r = strings.ReplaceAll(r, "/", "_")
@@ -205,8 +205,8 @@ func analyzeSymbol(symbol, interval, startDate, endDate string, dataDir string, 
 
 	windowSize := 50
 	patterns := 0
-	rejectStats := make(map[string]*int)
-	rejectChartCounts := make(map[string]int)
+	rejectStats := make(map[RejectReason]*int)
+	rejectChartCounts := make(map[RejectReason]int)
 
 	for i := 0; i <= len(candles)-windowSize; i++ {
 		window := candles[i : i+windowSize]
