@@ -2,21 +2,60 @@
 
 # Triangle Detector
 
-Usage
+Detects ascending triangle chart patterns in crypto candlestick data from Binance.
 
-- Read local `candles.json` (default when file exists):
-  ```sh
-  go run .
-  ```
+## Structure
 
-- Explicitly fetch from Binance (won't overwrite `candles.json` unless `-force` is used):
-  ```sh
-  go run . -symbol BTCUSDT -interval 15m -start 2026-04-14T00:00:00Z -end 2026-04-14T13:00:00Z
-  ```
+```
+cmd/triangled/      — main binary (batch scan + realtime monitor)
+internal/
+  domain/           — shared types (Candle)
+  detect/           — ascending triangle detection pipeline
+  render/           — ChartRenderer interface
+  render/echarts/   — go-echarts chart renderer
+  app/              — render orchestration facade
+  artifact/         — output file path management
+  screenshot/       — chromedp HTML→PNG conversion
+  marketdata/binance/ — Binance REST API client
+  config/           — .env loading, AppConfig
+```
 
-- Overwrite behavior:
-  - By default the loader will NOT overwrite an existing non-empty `candles.json`.
-  - To force overwrite when fetching, pass `-force`.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the full package dependency graph.
+
+## Build
+
+```sh
+go build ./cmd/triangled/
+# or via Makefile:
+make build
+```
+
+## Usage
+
+Copy `.env.example` to `.env` and set `DATA_DIR` and `SYMBOLS`:
+
+```env
+DATA_DIR=tmp
+SYMBOLS=BTCUSDT,ETHUSDT,BNBUSDT
+```
+
+**Batch scan** (one pass over all symbols):
+```sh
+./triangled
+```
+
+**Realtime monitor** (continuous polling):
+```sh
+./triangled -realtime
+```
+
+## Tests
+
+```sh
+make test
+# or directly:
+go test ./internal/...
+```
 
 ### Contact
 
