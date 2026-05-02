@@ -210,7 +210,7 @@ func analyzeSymbol(symbol, interval, startDate, endDate string, dataDir string, 
 
 	for i := 0; i <= len(candles)-windowSize; i++ {
 		window := candles[i : i+windowSize]
-		result := DetectAscendingTriangle(window, rejectStats)
+		result := DetectAscendingTriangle(window, DefaultDetectorParams(), rejectStats)
 
 		if result.Found {
 			patterns++
