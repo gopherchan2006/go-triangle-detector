@@ -1,12 +1,15 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -64,6 +67,9 @@ func writeDebugTxt(txtPath string, result AscendingTriangleResult) {
 
 
 func main() {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	symbol := flag.String("symbol", "", "Trading pair symbol, e.g. BTCUSDT")
 	interval := flag.String("interval", "", "Candle interval, e.g. 15m")
 	startDate := flag.String("start", "", "Start time in RFC3339 or YYYY-MM-DD (default: 2026-01-01)")
@@ -103,7 +109,7 @@ func main() {
 			OutputDir:       filepath.Join("tmp", "realtime"),
 			WithScreenshots: needBrowser,
 		}
-		RunRealtime(cfg, ss)
+		RunRealtime(ctx, cfg, ss)
 		return
 	}
 
@@ -142,11 +148,11 @@ func main() {
 	defer ss.Close()
 
 	for _, sym := range symbols {
-		analyzeSymbol(sym, *interval, *startDate, *endDate, dataDir, ss, *rejectLimit)
+		analyzeSymbol(ctx, sym, *interval, *startDate, *endDate, dataDir, ss, *rejectLimit)
 	}
 }
 
-func analyzeSymbol(symbol, interval, startDate, endDate string, dataDir string, ss *Screenshotter, rejectLimit int) {
+func analyzeSymbol(ctx context.Context, symbol, interval, startDate, endDate string, dataDir string, ss *Screenshotter, rejectLimit int) {
 	chartDir := filepath.Join("tmp", symbol+"_chart")
 	if err := os.MkdirAll(chartDir, 0o755); err != nil {
 		log.Printf("[%s] failed to create chart dir: %v", symbol, err)
@@ -183,6 +189,12 @@ func analyzeSymbol(symbol, interval, startDate, endDate string, dataDir string, 
 	rejectChartCounts := make(map[RejectReason]int)
 
 	for i := 0; i <= len(candles)-windowSize; i++ {
+		select {
+		case <-ctx.Done():
+			fmt.Printf("[%s] interrupted\n", symbol)
+			return
+		default:
+		}
 		window := candles[i : i+windowSize]
 		result := DetectAscendingTriangle(window, WithCounter(counter))
 

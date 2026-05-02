@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"math"
@@ -30,7 +31,7 @@ type alertState struct {
 	alertedAt  time.Time
 }
 
-func RunRealtime(cfg RealtimeConfig, ss *Screenshotter) {
+func RunRealtime(ctx context.Context, cfg RealtimeConfig, ss *Screenshotter) {
 	fmt.Println("[realtime] Fetching all active USDT spot pairs from Binance...")
 	symbols, err := FetchAllUSDTSymbols()
 	if err != nil {
@@ -53,9 +54,15 @@ func RunRealtime(cfg RealtimeConfig, ss *Screenshotter) {
 	alerts := make(map[string]alertState)
 	symbolsFetchedAt := time.Now()
 
-	runCycle(0, symbols, cfg, alerts, ss)
+	runCycle(ctx, 0, symbols, cfg, alerts, ss)
 
 	for cycle := 1; ; cycle++ {
+		select {
+		case <-ctx.Done():
+			fmt.Println("[realtime] shutdown signal received")
+			return
+		default:
+		}
 		if time.Since(symbolsFetchedAt) > 24*time.Hour {
 			if fresh, err := FetchAllUSDTSymbols(); err == nil {
 				symbols = fresh
@@ -70,13 +77,18 @@ func RunRealtime(cfg RealtimeConfig, ss *Screenshotter) {
 		waitDur := time.Until(next)
 		fmt.Printf("[realtime] Next scan at %s UTC (in %s)\n",
 			next.Format("2006-01-02 15:04:05"), waitDur.Round(time.Second))
-		time.Sleep(waitDur)
+		select {
+		case <-time.After(waitDur):
+		case <-ctx.Done():
+			fmt.Println("[realtime] shutdown signal received")
+			return
+		}
 
-		runCycle(cycle, symbols, cfg, alerts, ss)
+		runCycle(ctx, cycle, symbols, cfg, alerts, ss)
 	}
 }
 
-func runCycle(cycle int, symbols []string, cfg RealtimeConfig, alerts map[string]alertState, ss *Screenshotter) {
+func runCycle(ctx context.Context, cycle int, symbols []string, cfg RealtimeConfig, alerts map[string]alertState, ss *Screenshotter) {
 	start := time.Now()
 	label := "initial"
 	if cycle > 0 {
